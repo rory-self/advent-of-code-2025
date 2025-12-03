@@ -1,11 +1,13 @@
 const std = @import("std");
 
+// Constants //
 const FILE_PATH = "input.txt";
 const MAX_TURNS_DIGITS = 2;
 const NUM_DIALS = 100;
 const STARTING_NUMBER = 50;
 const BUF_SIZE = 1024;
 
+// Types //
 const Direction = enum {
     left,
     right,
@@ -47,7 +49,7 @@ const Instruction = struct {
             const direction = try Direction.fromChar(direction_char);
 
             const num_turns_str: []u8 = try reader.takeDelimiterExclusive('\n');
-            const num_turns = try std.fmt.parseInt(u16, num_turns_str, 10);
+            const num_turns: u16 = try std.fmt.parseInt(u16, num_turns_str, 10);
             reader.toss(1);
 
             const instruction = Instruction{ .direction = direction, .num_turns = num_turns };
@@ -68,12 +70,10 @@ pub fn main() !void {
     defer instructions.deinit(allocator);
 
     var curr_num: u8 = STARTING_NUMBER;
-    var num_zeroes: u64 = 0;
+    var num_zeroes: u16 = 0;
     for (try instructions.toOwnedSlice(allocator)) |instruction| {
-        curr_num = turn_dial(curr_num, instruction);
-        if (curr_num == 0) {
-            num_zeroes += 1;
-        }
+        curr_num = turn_dial(curr_num, instruction, &num_zeroes);
+        // std.debug.print("z: {} n: {}\n", .{num_zeroes, curr_num});
     }
 
     var writer_buf: [BUF_SIZE]u8 = undefined;
@@ -83,12 +83,30 @@ pub fn main() !void {
     try stdout_writer.flush();
 }
 
-fn turn_dial(curr_num: u8, instruction: Instruction) u8 {
-    const effective_turns: u8 = @truncate(instruction.num_turns % NUM_DIALS);
-    if (instruction.direction == .left) {
-        return @truncate((curr_num + NUM_DIALS - effective_turns) % NUM_DIALS);
-    } 
-    
-    return @truncate((curr_num + effective_turns) % NUM_DIALS);
-}
+fn turn_dial(curr_num: u8, instruction: Instruction, num_zeroes: *u16) u8 { 
+    const num_turns: u16 = instruction.num_turns;
+    if (num_turns == 0) {
+        return curr_num;
+    }
 
+    const effective_turns: u8 = @truncate(num_turns % NUM_DIALS);
+    const full_rotations: u16 = @divFloor(num_turns, NUM_DIALS);
+    if (full_rotations > 0) {
+        num_zeroes.* += if (curr_num == 0 and effective_turns == 0) full_rotations - 1 else full_rotations;
+    }
+
+    if (instruction.direction == .left) {
+        if (curr_num <= effective_turns and curr_num != 0) {
+            num_zeroes.* += 1;
+        }
+
+        return @truncate((curr_num + NUM_DIALS - effective_turns) % NUM_DIALS);
+    }
+
+    const raw_turn_total: u8 = curr_num + effective_turns;
+    if (raw_turn_total >= NUM_DIALS and curr_num != 0) {
+        num_zeroes.* += 1;
+    }
+
+    return @truncate(raw_turn_total % NUM_DIALS);
+}
