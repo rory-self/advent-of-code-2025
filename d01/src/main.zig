@@ -2,10 +2,9 @@ const std = @import("std");
 
 // Constants //
 const FILE_PATH = "input.txt";
-const MAX_TURNS_DIGITS = 2;
-const NUM_DIALS = 100;
-const STARTING_NUMBER = 50;
-const BUF_SIZE = 1024;
+const NUM_DIALS: u8 = 100;
+const STARTING_NUMBER: u8 = 50;
+const BUF_SIZE: usize = 1024;
 
 // Types //
 const Direction = enum {
@@ -70,43 +69,53 @@ pub fn main() !void {
     defer instructions.deinit(allocator);
 
     var curr_num: u8 = STARTING_NUMBER;
+    var zero_clicks: u16 = 0;
     var num_zeroes: u16 = 0;
     for (try instructions.toOwnedSlice(allocator)) |instruction| {
-        curr_num = turn_dial(curr_num, instruction, &num_zeroes);
-        // std.debug.print("z: {} n: {}\n", .{num_zeroes, curr_num});
+        const dial_result = turn_dial(curr_num, instruction);
+        curr_num = dial_result[0];
+        zero_clicks += dial_result[1];
+        
+        if (curr_num == 0) {
+            num_zeroes += 1;
+        }
     }
 
     var writer_buf: [BUF_SIZE]u8 = undefined;
     var stdout_file_writer = std.fs.File.stdout().writer(&writer_buf);
     var stdout_writer = &stdout_file_writer.interface;
-    try stdout_writer.print("The code is: {d}\n", .{num_zeroes});
+    try stdout_writer.print("Part one code is: {d}\n", .{num_zeroes});
+    try stdout_writer.print("Part two code is {d}\n", .{zero_clicks});
     try stdout_writer.flush();
 }
 
-fn turn_dial(curr_num: u8, instruction: Instruction, num_zeroes: *u16) u8 { 
+fn turn_dial(curr_num: u8, instruction: Instruction) struct {u8, u8} { 
     const num_turns: u16 = instruction.num_turns;
     if (num_turns == 0) {
-        return curr_num;
+        return .{curr_num, 0};
     }
 
+    // Calculate full rotations and remaining turns
     const effective_turns: u8 = @truncate(num_turns % NUM_DIALS);
-    const full_rotations: u16 = @divFloor(num_turns, NUM_DIALS);
-    if (full_rotations > 0) {
-        num_zeroes.* += if (curr_num == 0 and effective_turns == 0) full_rotations - 1 else full_rotations;
+    var zero_clicks: u8 = @truncate(@divFloor(num_turns, NUM_DIALS));
+    if (curr_num == 0 and effective_turns == 0) {
+        return .{curr_num, zero_clicks};
     }
 
-    if (instruction.direction == .left) {
+    const new_num: u8 = if (instruction.direction == .left) left: {
         if (curr_num <= effective_turns and curr_num != 0) {
-            num_zeroes.* += 1;
+            zero_clicks += 1;
         }
 
-        return @truncate((curr_num + NUM_DIALS - effective_turns) % NUM_DIALS);
-    }
+        break :left @truncate((curr_num + NUM_DIALS - effective_turns) % NUM_DIALS);
+    } else right: {
+        const raw_turn_total: u8 = curr_num + effective_turns;
+        if (raw_turn_total >= NUM_DIALS and curr_num != 0) {
+            zero_clicks += 1;
+        }
 
-    const raw_turn_total: u8 = curr_num + effective_turns;
-    if (raw_turn_total >= NUM_DIALS and curr_num != 0) {
-        num_zeroes.* += 1;
-    }
+        break :right @truncate(raw_turn_total % NUM_DIALS);
+    };
 
-    return @truncate(raw_turn_total % NUM_DIALS);
+    return .{new_num, zero_clicks};
 }
