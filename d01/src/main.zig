@@ -98,7 +98,7 @@ fn turn_dial(curr_num: u8, instruction: Instruction) struct {u8, u8} {
     // Calculate full rotations and remaining turns
     const effective_turns: u8 = @truncate(num_turns % NUM_DIALS);
     var zero_clicks: u8 = @truncate(@divFloor(num_turns, NUM_DIALS));
-    if (curr_num == 0 and effective_turns == 0) {
+    if (effective_turns == 0) {
         return .{curr_num, zero_clicks};
     }
 
