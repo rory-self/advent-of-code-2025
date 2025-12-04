@@ -31,7 +31,7 @@ const IdRange = struct {
         var input_file = try std.fs.cwd().openFile(filepath, .{ .mode = .read_only });
         defer input_file.close();
 
-        var reader_buf: [BUF_SIZE]u8 = undefined; 
+        var reader_buf: [BUF_SIZE]u8 = undefined;
         var file_reader = input_file.reader(&reader_buf);
         var reader = &file_reader.interface;
 
@@ -51,10 +51,7 @@ const IdRange = struct {
             };
 
             const separator_index: usize = std.mem.indexOf(u8, range_str, "-").?;
-            const id_range = IdRange {
-                .min_id = try allocator.dupe(u8, range_str[0..separator_index]),
-                .max_id = try allocator.dupe(u8, range_str[separator_index + 1..range_str_len])
-            };
+            const id_range = IdRange{ .min_id = try allocator.dupe(u8, range_str[0..separator_index]), .max_id = try allocator.dupe(u8, range_str[separator_index + 1 .. range_str_len]) };
 
             try id_range_list.append(allocator, id_range);
         }
@@ -65,7 +62,7 @@ const IdRange = struct {
     fn getInvalidIdSum(self: *const IdRange) !u64 {
         // Check the number of digits, since odd digits cannot repeat patterns twice.
         const min_val_digits: usize = self.min_id.len;
-        const odd_min_val_digits: bool = isOdd(min_val_digits); 
+        const odd_min_val_digits: bool = isOdd(min_val_digits);
 
         const max_val_digits: usize = self.max_id.len;
         const odd_max_val_digits: bool = isOdd(max_val_digits);
@@ -81,7 +78,7 @@ const IdRange = struct {
             if (isOdd(i)) {
                 continue;
             }
-           
+
             const index_u64 = @as(u64, i);
             const base_id: u64 = if (i == min_val_digits) min_val else std.math.pow(u64, 10, index_u64 - 1);
             const max_id: u64 = if (i == max_val_digits) max_val else std.math.pow(u64, 10, index_u64) - 1;
@@ -92,22 +89,19 @@ const IdRange = struct {
                 const bytes = std.fmt.printInt(&buf, j, 10, .lower, .{});
 
                 if (std.mem.eql(u8, buf[0..mid_index], buf[mid_index..bytes])) {
-                    invalidIdSum += @truncate(j);
+                    invalidIdSum += j;
                 }
             }
         }
 
         return invalidIdSum;
-    } 
+    }
 };
 
 inline fn isOdd(num: usize) bool {
-        return num % 2 == 1;
+    return num % 2 == 1;
 }
 
 const IdRangeList = std.ArrayList(IdRange);
 
-
-test "Example Test" {
-}
-
+test "Example Test" {}
