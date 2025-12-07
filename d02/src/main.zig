@@ -5,7 +5,6 @@ const std = @import("std");
 const INPUT_FILEPATH = "input.txt";
 const TEST_FILEPATH = "test.txt";
 const IO_BUF_SIZE: usize = 1024;
-const MIN_REPEATS: u8 = 2;
 
 // Aliases //
 const DigitPatternLenMap = std.hash_map.AutoHashMap(usize, []usize);
