@@ -15,21 +15,27 @@ pub fn main() !void {
     _ = args.skip();
 
     const input_filepath = args.next() orelse return error.MissingArg;
-    const total_output_joltage = try calcTotalOutputJoltage(input_filepath, allocator);
+    const total_output_joltage_p1 = try calcTotalOutputJoltage(input_filepath, allocator, 2);
+    const total_output_joltage_p2 = try calcTotalOutputJoltage(input_filepath, allocator, 12);
 
     var writer_buf: [IO_BUF_SIZE]u8 = undefined;
     var stdout_file_writer = std.fs.File.stdout().writer(&writer_buf);
     var stdout_writer = &stdout_file_writer.interface;
-    try stdout_writer.print("Total output joltage is: {d}\n", .{total_output_joltage});
+    try stdout_writer.print("Total output joltage (two batteries/bank) is: {d}\n", .{total_output_joltage_p1});
+    try stdout_writer.print("Total output joltage (twelve batteries/bank) is {d}\n", .{total_output_joltage_p2});
     try stdout_writer.flush();
 }
 
-fn calcTotalOutputJoltage(input_filepath: []const u8, allocator: Allocator) !u32 {
+fn calcTotalOutputJoltage(
+    input_filepath: []const u8,
+    allocator: Allocator,
+    batteries_per_bank: u8
+) !u64 {
     const banks: Banks = try readBanksFromFile(input_filepath, allocator);
 
-    var total_output_joltage: u32 = 0;
+    var total_output_joltage: u64 = 0;
     for (banks) |bank| {
-       total_output_joltage += try calcMaxBankJoltage(bank);
+       total_output_joltage += try calcMaxBankJoltage(bank, batteries_per_bank, allocator);
     }
 
     return total_output_joltage;
@@ -59,29 +65,40 @@ fn readBanksFromFile(filepath: []const u8, allocator: std.mem.Allocator) !Banks 
     return try bank_list.toOwnedSlice(allocator);
 }
 
-fn calcMaxBankJoltage(bank: []const u8) !u8 {
-    var max_rating: [2]u8 = undefined;
-    max_rating[0] = bank[bank.len - 2];
-    max_rating[1] = bank[bank.len - 1];
-
-    var i: usize = bank.len - 2;
-    while (i > 0) {
-        i -= 1; 
-        const battery_rating = bank[i];
-
-        const curr_leading_digit = max_rating[0];
-        if (battery_rating >= curr_leading_digit) {
-            if (curr_leading_digit > max_rating[1]) {
-                max_rating[1] = curr_leading_digit;
-            }
-            
-            max_rating[0] = battery_rating;
-        }
-
-        if (std.mem.eql(u8, &max_rating, "99")) break;
+fn calcMaxBankJoltage(
+    bank: []const u8, 
+    num_batteries: u8,
+    allocator: Allocator,
+) !u64 {
+    if (bank.len < num_batteries) {
+        return error.InsufficientBatteries;
     }
 
-    return try std.fmt.parseInt(u8, &max_rating, 10);
+    var max_rating = try allocator.alloc(u8, num_batteries);
+    for (0..num_batteries) |i| {
+        max_rating[num_batteries - i - 1] = bank[bank.len - i - 1];
+    }
+
+    const max_possible_joltage = try allocator.alloc(u8, num_batteries);
+    @memset(max_possible_joltage, '9');
+    if (std.mem.eql(u8, max_rating, max_possible_joltage)) {
+        return try std.fmt.parseInt(u64, max_rating, 10);
+    }
+
+    for (num_batteries..bank.len) |i| {
+        const battery_rating = bank[bank.len - i - 1];
+
+        var prev_digit = battery_rating;
+        for (0..num_batteries) |j| {
+            if (prev_digit < max_rating[j]) break;
+
+            std.mem.swap(u8, &prev_digit, &max_rating[j]);
+        }
+
+        if (std.mem.eql(u8, max_rating, max_possible_joltage)) break;
+    }
+
+    return try std.fmt.parseInt(u64, max_rating, 10);
 }
 
 test "Example" {
@@ -89,7 +106,10 @@ test "Example" {
     defer arena.deinit();
     const allocator = arena.allocator();
 
-    const total_output_joltage = try calcTotalOutputJoltage(TEST_INPUT_FILEPATH, allocator);
-    try std.testing.expect(total_output_joltage == 357);
+    const total_output_joltage_p1 = try calcTotalOutputJoltage(TEST_INPUT_FILEPATH, allocator, 2);
+    try std.testing.expect(total_output_joltage_p1 == 357);
+
+    const total_output_joltage_p2 = try calcTotalOutputJoltage(TEST_INPUT_FILEPATH, allocator, 12);
+    try std.testing.expect(total_output_joltage_p2 == 3121910778619);
 }
 
