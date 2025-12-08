@@ -71,7 +71,7 @@ fn readInventoryFromFile(filepath: []const u8, allocator: Allocator) !InventoryD
             return err;
         };
         reader.toss(1);
-    
+
         const id = try std.fmt.parseInt(u64, id_str, 10);
         try available_id_list.append(allocator, id);
     }
@@ -88,4 +88,3 @@ test "Example" {
     const num_fresh_ingredient_ids = try countFreshIngredientIDs(TEST_INPUT_FILEPATH, allocator);
     try std.testing.expect(num_fresh_ingredient_ids == 3);
 }
-

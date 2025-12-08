@@ -9,8 +9,8 @@ pub const FreshRange = struct {
     pub fn fromString(string: []const u8) !FreshRange {
         const separator_index = std.mem.indexOf(u8, string, "-") orelse return error.MissingDelimiter;
         const min_id = string[0..separator_index];
-        const max_id = string[separator_index + 1..];
-        
+        const max_id = string[separator_index + 1 ..];
+
         const min_val = try std.fmt.parseInt(u64, min_id, 10);
         const max_val = try std.fmt.parseInt(u64, max_id, 10);
         return .{ .min_id = min_val, .max_id = max_val };
@@ -31,7 +31,7 @@ const RangeTreeNode = struct {
         new_node.range = range;
         new_node.left = null;
         new_node.right = null;
-        
+
         return new_node;
     }
 
@@ -43,7 +43,7 @@ const RangeTreeNode = struct {
         const new_min_id = new_range.min_id;
         const new_max_id = new_range.max_id;
         const range = self.range;
-       
+
         if (new_min_id < range.min_id and new_max_id > range.max_id) {
             self.range = new_range;
             collapseTreeLeft(self, new_min_id);
@@ -58,7 +58,7 @@ const RangeTreeNode = struct {
             collapseTreeLeft(self, new_min_id);
             return;
         }
-        
+
         if (new_max_id < range.min_id) {
             if (self.left) |left_node| {
                 try left_node.doInsertRange(new_range, allocator);
@@ -96,7 +96,7 @@ const RangeTreeNode = struct {
 
             self.range.max_id = right_node.range.max_id;
             self.right = right_node.right;
-        } 
+        }
     }
 
     fn idInRange(self: *const RangeTreeNode, id: u64) bool {
@@ -111,7 +111,7 @@ const RangeTreeNode = struct {
             }
             return false;
         }
-       
+
         if (self.right) |right_node| {
             return right_node.idInRange(id);
         }
@@ -145,4 +145,3 @@ pub const RangeTree = struct {
         return false;
     }
 };
-
