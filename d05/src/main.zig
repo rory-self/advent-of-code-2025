@@ -29,7 +29,7 @@ pub fn main() !void {
     try stdout_writer.flush();
 }
 
-fn countFreshIngredientIDs(input_filepath: []const u8, allocator: Allocator) !struct {u16, u64} {
+fn countFreshIngredientIDs(input_filepath: []const u8, allocator: Allocator) !struct { u16, u64 } {
     const inventory_data = try readInventoryFromFile(input_filepath, allocator);
     const fresh_id_ranges = inventory_data.fresh_id_ranges;
 

@@ -88,11 +88,11 @@ const RangeTreeNode = struct {
             } else if (range.max_id < curr_min) {
                 return collapseTree(&curr_node.left, range);
             }
-            
+
             var new_range = range;
             if (curr_range.idInRange(range.max_id)) {
                 new_range.max_id = curr_max;
-                node.* = curr_node.right;    
+                node.* = curr_node.right;
             } else {
                 new_range.min_id = curr_min;
                 node.* = curr_node.left;
