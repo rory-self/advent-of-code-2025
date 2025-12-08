@@ -4,14 +4,14 @@ const TEST_INPUT_FILEPATH = "test.txt";
 const IO_BUF_SIZE: usize = 1024;
 const MAX_ROLLS: u3 = 4;
 const DIRECTIONS: [8][2]i2 = .{
-    .{-1, -1},
-    .{-1, 0},
-    .{-1, 1},
-    .{0, -1},
-    .{0, 1},
-    .{1, -1},
-    .{1, 0},
-    .{1, 1},
+    .{ -1, -1 },
+    .{ -1, 0 },
+    .{ -1, 1 },
+    .{ 0, -1 },
+    .{ 0, 1 },
+    .{ 1, -1 },
+    .{ 1, 0 },
+    .{ 1, 1 },
 };
 
 const Space = enum {
@@ -20,13 +20,13 @@ const Space = enum {
 
     fn fromChar(char: u8) !Space {
         return switch (char) {
-            '@'  => .roll,
-            '.'  => .empty,
+            '@' => .roll,
+            '.' => .empty,
             else => error.InvalidCharacter,
         };
     }
 };
-const SpaceGrid = []const []const Space;
+const SpaceGrid = [][]Space;
 const Allocator = std.mem.Allocator;
 
 pub fn main() !void {
@@ -38,34 +38,35 @@ pub fn main() !void {
     _ = args.skip();
     const input_filepath = args.next() orelse return error.MissingArg;
 
-    const accessible_rolls: u16 = try calcAccessibleRolls(input_filepath, allocator);
+    const clearance_return = try calcClearableRolls(input_filepath, allocator);
+    const initial_accessible_rolls, const rolls_removed = clearance_return;
 
     var writer_buf: [IO_BUF_SIZE]u8 = undefined;
     var stdout_file_writer = std.fs.File.stdout().writer(&writer_buf);
     var stdout_writer = &stdout_file_writer.interface;
-    try stdout_writer.print("Accessible Rolls: {d}\n", .{accessible_rolls});
+    try stdout_writer.print("Initially accessible rolls: {d}\n", .{initial_accessible_rolls});
+    try stdout_writer.print("Total rolls removed: {d}\n", .{rolls_removed});
     try stdout_writer.flush();
 }
 
-fn calcAccessibleRolls(input_filepath: []const u8, allocator: Allocator) !u16 {
-    const grid = try readGridFromFile(input_filepath, allocator);
+fn calcClearableRolls(input_filepath: []const u8, allocator: Allocator) !struct {u16, u16} {
+    var grid = try readGridFromFile(input_filepath, allocator);
     if (grid.len == 0) {
         return error.EmptyGrid;
     }
-    const row_len = grid[0].len;
 
-    var accessible_rolls: u16 = 0;
-    for (0..grid.len) |row| {
-        for (0..row_len) |col| {
-            if (grid[row][col] != .roll) continue;
+    const initial_rolls_removed = try clearRolls(&grid, allocator);
+    var total_rolls_removed = initial_rolls_removed;
+    while (true) {
+        const last_rolls_removed = try clearRolls(&grid, allocator);
+        total_rolls_removed += last_rolls_removed;
 
-            if (isRollAccessible(row, col, grid, grid.len, row_len)) {
-                accessible_rolls += 1;
-            }
+        if (last_rolls_removed == 0) {
+            return .{ initial_rolls_removed, total_rolls_removed };
         }
     }
 
-    return accessible_rolls;
+    unreachable;
 }
 
 fn readGridFromFile(filepath: []const u8, allocator: Allocator) !SpaceGrid {
@@ -79,29 +80,53 @@ fn readGridFromFile(filepath: []const u8, allocator: Allocator) !SpaceGrid {
     var space_grid: std.ArrayList([]Space) = .empty;
     while (true) {
         const line = reader.takeDelimiterExclusive('\n') catch |err| {
-            if (err == error.EndOfStream) break;
+            if (err == error.EndOfStream) {
+                break;
+            }
             return err;
         };
         reader.toss(1);
 
         var spaces = try allocator.alloc(Space, line.len);
-        for (0..line.len) |i| {
-            spaces[i] = try Space.fromChar(line[i]);
+        for (line, 0..) |space_char, i| {
+            spaces[i] = try Space.fromChar(space_char);
         }
 
         try space_grid.append(allocator, spaces);
     }
-    
+
     return try space_grid.toOwnedSlice(allocator);
+}
+
+fn clearRolls(grid: *SpaceGrid, allocator: Allocator) !u16 {
+    var accessible_rolls: std.ArrayList(*Space) = .empty;
+    for (grid.*, 0..) |row, i| {
+        for (row, 0..) |space, j| {
+            if (space != .roll) {
+                continue;
+            }
+
+            if (isRollAccessible(i, j, grid.*, row.len)) {
+                try accessible_rolls.append(allocator, &grid.*[i][j]);
+            }
+        }
+    }
+
+    var rolls_removed: u16 = 0;
+    for (accessible_rolls.items) |roll_space| {
+        roll_space.* = .empty;
+        rolls_removed += 1;
+    }
+
+    return rolls_removed;
 }
 
 fn isRollAccessible(
     row: usize,
     col: usize,
     grid: SpaceGrid,
-    num_rows: usize,
     num_col: usize,
-) bool { 
+) bool {
     var num_rolls: u8 = 0;
     for (DIRECTIONS, 0..) |direction, i| {
         if (DIRECTIONS.len - i < MAX_ROLLS - num_rolls) {
@@ -110,11 +135,15 @@ fn isRollAccessible(
 
         const new_row, const row_overflow = addWithOverflow(row, direction[0]);
         const new_col, const col_overflow = addWithOverflow(col, direction[1]);
-        if (row_overflow or col_overflow or new_row >= num_rows or new_col >= num_col) continue;
+        if (row_overflow or col_overflow or new_row >= grid.len or new_col >= num_col) {
+            continue;
+        }
 
         if (grid[new_row][new_col] == .roll) {
             num_rolls += 1;
-            if (num_rolls == MAX_ROLLS) return false;
+            if (num_rolls == MAX_ROLLS) {
+                return false;
+            }
         }
     }
 
@@ -122,12 +151,13 @@ fn isRollAccessible(
 }
 
 fn addWithOverflow(a: usize, b: i2) struct { usize, bool } {
-    if (b == 0) return .{ a, false };
+    if (b == 0) {
+        return .{ a, false };
+    }
 
     const padded_b = @as(i64, b);
     const unsigned_b: usize = @abs(padded_b);
-    const new_val, const overflow = if (b > 0) @addWithOverflow(a, unsigned_b)
-        else @subWithOverflow(a, unsigned_b);
+    const new_val, const overflow = if (b > 0) @addWithOverflow(a, unsigned_b) else @subWithOverflow(a, unsigned_b);
 
     return .{ new_val, overflow == 0b1 };
 }
@@ -137,7 +167,8 @@ test "Example" {
     defer arena.deinit();
     const allocator = arena.allocator();
 
-    const accessible_rolls = try calcAccessibleRolls(TEST_INPUT_FILEPATH, allocator);
-    try std.testing.expect(accessible_rolls == 13);
+    const test_result = try calcClearableRolls(TEST_INPUT_FILEPATH, allocator);
+    const initially_accessible_rolls, const removed_rolls = test_result;
+    try std.testing.expect(initially_accessible_rolls == 13);
+    try std.testing.expect(removed_rolls == 43);
 }
-
