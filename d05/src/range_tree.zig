@@ -42,20 +42,21 @@ const RangeTreeNode = struct {
     ) !void {
         const new_min_id = new_range.min_id;
         const new_max_id = new_range.max_id;
-        const range = self.range;
+        var range = self.range;
 
         if (new_min_id < range.min_id and new_max_id > range.max_id) {
-            self.range = new_range;
-            collapseTreeLeft(self, new_min_id);
-            collapseTreeRight(self, new_max_id);
+            self.range = collapseTree(&self.left, new_range);
+            self.range = collapseTree(&self.right, new_range);
             return;
         } else if (range.idInRange(new_min_id) and new_max_id > range.max_id) {
-            self.range.max_id = new_max_id;
-            collapseTreeRight(self, new_max_id);
+            range.max_id = new_range.max_id;
+            self.range = collapseTree(&self.right, range);
             return;
         } else if (range.idInRange(new_max_id) and new_min_id < range.min_id) {
-            self.range.min_id = new_min_id;
-            collapseTreeLeft(self, new_min_id);
+            range.min_id = new_range.min_id;
+            self.range = collapseTree(&self.left, range);
+            return;
+        } else if (range.idInRange(new_max_id) and range.idInRange(new_min_id)) {
             return;
         }
 
@@ -77,26 +78,30 @@ const RangeTreeNode = struct {
         self.right = try RangeTreeNode.fromRange(new_range, allocator);
     }
 
-    fn collapseTreeLeft(self: *RangeTreeNode, min_bound: u64) void {
-        while (self.left) |left_node| {
-            if (left_node.range.max_id < min_bound) {
-                break;
+    fn collapseTree(node: *?*RangeTreeNode, range: FreshRange) FreshRange {
+        if (node.*) |curr_node| {
+            const curr_range = curr_node.range;
+            const curr_max = curr_range.max_id;
+            const curr_min = curr_range.min_id;
+            if (range.min_id > curr_max) {
+                return collapseTree(&curr_node.right, range);
+            } else if (range.max_id < curr_min) {
+                return collapseTree(&curr_node.left, range);
+            }
+            
+            var new_range = range;
+            if (curr_range.idInRange(range.max_id)) {
+                new_range.max_id = curr_max;
+                node.* = curr_node.right;    
+            } else {
+                new_range.min_id = curr_min;
+                node.* = curr_node.left;
             }
 
-            self.range.min_id = left_node.range.min_id;
-            self.left = left_node.left;
+            return new_range;
         }
-    }
 
-    fn collapseTreeRight(self: *RangeTreeNode, max_bound: u64) void {
-        while (self.right) |right_node| {
-            if (right_node.range.min_id > max_bound) {
-                break;
-            }
-
-            self.range.max_id = right_node.range.max_id;
-            self.right = right_node.right;
-        }
+        return range;
     }
 
     fn idInRange(self: *const RangeTreeNode, id: u64) bool {
@@ -116,6 +121,18 @@ const RangeTreeNode = struct {
             return right_node.idInRange(id);
         }
         return false;
+    }
+
+    fn countIDs(self: *const RangeTreeNode) u64 {
+        var num_ids: u64 = @intCast(self.range.max_id - self.range.min_id + 1);
+        if (self.left) |left_node| {
+            num_ids += left_node.countIDs();
+        }
+
+        if (self.right) |right_node| {
+            num_ids += right_node.countIDs();
+        }
+        return num_ids;
     }
 };
 
@@ -143,5 +160,13 @@ pub const RangeTree = struct {
             return head_range.idInRange(id);
         }
         return false;
+    }
+
+    pub fn countIDs(self: *const RangeTree) u64 {
+        if (self.head) |head_range| {
+            return head_range.countIDs();
+        } else {
+            return 0;
+        }
     }
 };

@@ -19,26 +19,29 @@ pub fn main() !void {
     _ = args.skip();
     const input_filepath = args.next() orelse return error.MissingArg;
 
-    const num_fresh_ids = try countFreshIngredientIDs(input_filepath, allocator);
+    const num_fresh_ids, const possible_fresh_ids = try countFreshIngredientIDs(input_filepath, allocator);
 
     var writer_buf: [IO_BUF_SIZE]u8 = undefined;
     var stdout_file_writer = std.fs.File.stdout().writer(&writer_buf);
     var stdout_writer = &stdout_file_writer.interface;
-    try stdout_writer.print("Number of fresh IDs: {d}\n", .{num_fresh_ids});
+    try stdout_writer.print("Number of available fresh IDs: {d}\n", .{num_fresh_ids});
+    try stdout_writer.print("Total fresh IDs: {d}\n", .{possible_fresh_ids});
     try stdout_writer.flush();
 }
 
-fn countFreshIngredientIDs(input_filepath: []const u8, allocator: Allocator) !u16 {
+fn countFreshIngredientIDs(input_filepath: []const u8, allocator: Allocator) !struct {u16, u64} {
     const inventory_data = try readInventoryFromFile(input_filepath, allocator);
+    const fresh_id_ranges = inventory_data.fresh_id_ranges;
 
     var num_fresh: u16 = 0;
     for (inventory_data.available_ids) |id| {
-        if (inventory_data.fresh_id_ranges.idInRange(id)) {
+        if (fresh_id_ranges.idInRange(id)) {
             num_fresh += 1;
         }
     }
 
-    return num_fresh;
+    const possible_fresh_ids = fresh_id_ranges.countIDs();
+    return .{ num_fresh, possible_fresh_ids };
 }
 
 fn readInventoryFromFile(filepath: []const u8, allocator: Allocator) !InventoryData {
@@ -85,6 +88,7 @@ test "Example" {
     defer arena.deinit();
     const allocator = arena.allocator();
 
-    const num_fresh_ingredient_ids = try countFreshIngredientIDs(TEST_INPUT_FILEPATH, allocator);
-    try std.testing.expect(num_fresh_ingredient_ids == 3);
+    const num_fresh, const possible_fresh = try countFreshIngredientIDs(TEST_INPUT_FILEPATH, allocator);
+    try std.testing.expect(num_fresh == 3);
+    try std.testing.expect(possible_fresh == 14);
 }
