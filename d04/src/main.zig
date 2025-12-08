@@ -49,7 +49,7 @@ pub fn main() !void {
     try stdout_writer.flush();
 }
 
-fn calcClearableRolls(input_filepath: []const u8, allocator: Allocator) !struct {u16, u16} {
+fn calcClearableRolls(input_filepath: []const u8, allocator: Allocator) !struct { u16, u16 } {
     var grid = try readGridFromFile(input_filepath, allocator);
     if (grid.len == 0) {
         return error.EmptyGrid;

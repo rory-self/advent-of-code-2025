@@ -13,11 +13,7 @@ const Allocator = std.mem.Allocator;
 const Pow = std.math.pow;
 
 // Types //
-const IdCategory = enum {
-    valid,
-    p1_invalid,
-    p2_invalid
-};
+const IdCategory = enum { valid, p1_invalid, p2_invalid };
 
 // Implementation //
 pub fn main() !void {
@@ -52,9 +48,9 @@ fn invalidIdSumsFromFile(filepath: []const u8) !struct { u64, u64 } {
         const sum_p1, const sum_p2 = try id_range.calcInvalidIdSums(&pattern_lens_by_digits, allocator);
         total_sum_p1 += sum_p1;
         total_sum_p2 += sum_p2;
-    } 
+    }
 
-    return .{total_sum_p1, total_sum_p2};
+    return .{ total_sum_p1, total_sum_p2 };
 }
 
 /// Given a valid path to a file containing the puzzle input, returns a slice containing all the
@@ -62,11 +58,11 @@ fn invalidIdSumsFromFile(filepath: []const u8) !struct { u64, u64 } {
 fn idRangesFromFile(filepath: []const u8, allocator: Allocator) ![]const IdRange {
     var input_file = try std.fs.cwd().openFile(filepath, .{ .mode = .read_only });
     defer input_file.close();
-                                                                                                                                                                                        
+
     var reader_buf: [IO_BUF_SIZE]u8 = undefined;
     var file_reader = input_file.reader(&reader_buf);
     var reader = &file_reader.interface;
-                                                                                                                                                                                        
+
     var id_range_list: std.ArrayList(IdRange) = .empty;
     errdefer id_range_list.deinit(allocator);
 
@@ -83,31 +79,26 @@ fn idRangesFromFile(filepath: []const u8, allocator: Allocator) ![]const IdRange
             reader.toss(1);
             break :not_end range_str.len;
         };
-                                                                                                                                                                                        
-        const separator_index: usize = std.mem.indexOf(u8, range_str, "-")
-            orelse return error.MissingDelimiter;
+
+        const separator_index: usize = std.mem.indexOf(u8, range_str, "-") orelse return error.MissingDelimiter;
         const min_id = range_str[0..separator_index];
-        const max_id = range_str[separator_index + 1..range_str_len];
-        
+        const max_id = range_str[separator_index + 1 .. range_str_len];
+
         const min_val = try std.fmt.parseInt(u64, min_id, 10);
         const max_val = try std.fmt.parseInt(u64, max_id, 10);
 
-        const id_range = IdRange{ .min_id = min_val, .max_id = max_val };                                                                                                                                                                             
+        const id_range = IdRange{ .min_id = min_val, .max_id = max_val };
         try id_range_list.append(allocator, id_range);
     }
-                                                                                                                                                                                        
+
     return try id_range_list.toOwnedSlice(allocator);
 }
 
 const IdRange = struct {
     min_id: u64,
-    max_id: u64, 
-    
-    fn calcInvalidIdSums(
-        self: *const IdRange,
-        pattern_lengths_by_digit: *DigitPatternLenMap,
-        allocator: Allocator
-    ) !struct { u64, u64 } {
+    max_id: u64,
+
+    fn calcInvalidIdSums(self: *const IdRange, pattern_lengths_by_digit: *DigitPatternLenMap, allocator: Allocator) !struct { u64, u64 } {
         const min_digits: u8 = countDigits(self.min_id);
         const max_digits: u8 = countDigits(self.max_id);
 
@@ -124,7 +115,7 @@ const IdRange = struct {
                 length_ptr.* = try calcPossiblePatternLengths(i, allocator);
             }
             const pattern_lengths: []usize = length_ptr.*;
-            
+
             const padded_index = @as(u64, i);
             const base_id: u64 = if (i == min_digits) self.min_id else Pow(u64, 10, padded_index - 1);
             const max_id: u64 = if (i == max_digits) self.max_id else Pow(u64, 10, padded_index) - 1;
@@ -160,20 +151,15 @@ fn calcPossiblePatternLengths(num_digits: usize, allocator: Allocator) ![]usize 
     var lengths: std.ArrayList(usize) = .empty;
 
     for (1..num_digits) |i| {
-       if (num_digits % i == 0) {
+        if (num_digits % i == 0) {
             try lengths.append(allocator, i);
-       }
+        }
     }
 
     return try lengths.toOwnedSlice(allocator);
 }
 
-fn checkId(
-    id: u64,
-    num_digits: usize,
-    pattern_lengths: []const usize,
-    allocator: Allocator
-) !IdCategory {
+fn checkId(id: u64, num_digits: usize, pattern_lengths: []const usize, allocator: Allocator) !IdCategory {
     const digits: []const u8 = try collectDigits(id, num_digits, allocator);
     defer allocator.free(digits);
 
@@ -184,7 +170,7 @@ fn checkId(
         const pattern_length = pattern_lengths[i];
         var sampled_pattern = try allocator.alloc(usize, pattern_length);
         defer allocator.free(sampled_pattern);
-        
+
         for (0..pattern_length) |j| {
             sampled_pattern[j] = digits[j];
         }
@@ -201,7 +187,7 @@ fn checkId(
         }
 
         if (pattern_matches) {
-            return if (pattern_length == num_digits / 2 and num_digits % 2 == 0) .p1_invalid else .p2_invalid; 
+            return if (pattern_length == num_digits / 2 and num_digits % 2 == 0) .p1_invalid else .p2_invalid;
         }
     }
 
@@ -210,18 +196,17 @@ fn checkId(
 
 fn collectDigits(num: u64, num_digits: usize, allocator: Allocator) ![]const u8 {
     var carry_num: u64 = num;
- 
+
     var digits = try allocator.alloc(u8, num_digits);
     for (0..num_digits) |i| {
         const magnitude = Pow(u64, 10, num_digits - i - 1);
         const digit = @divFloor(carry_num, magnitude);
         digits[i] = @truncate(digit);
- 
+
         carry_num -= digit * magnitude;
     }
     return digits;
 }
-
 
 // Tests //
 test "Example Test" {

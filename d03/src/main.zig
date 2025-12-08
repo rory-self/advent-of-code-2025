@@ -26,16 +26,12 @@ pub fn main() !void {
     try stdout_writer.flush();
 }
 
-fn calcTotalOutputJoltage(
-    input_filepath: []const u8,
-    allocator: Allocator,
-    batteries_per_bank: u8
-) !u64 {
+fn calcTotalOutputJoltage(input_filepath: []const u8, allocator: Allocator, batteries_per_bank: u8) !u64 {
     const banks: Banks = try readBanksFromFile(input_filepath, allocator);
 
     var total_output_joltage: u64 = 0;
     for (banks) |bank| {
-       total_output_joltage += try calcMaxBankJoltage(bank, batteries_per_bank, allocator);
+        total_output_joltage += try calcMaxBankJoltage(bank, batteries_per_bank, allocator);
     }
 
     return total_output_joltage;
@@ -44,11 +40,11 @@ fn calcTotalOutputJoltage(
 fn readBanksFromFile(filepath: []const u8, allocator: std.mem.Allocator) !Banks {
     var input_file = try std.fs.cwd().openFile(filepath, .{ .mode = .read_only });
     defer input_file.close();
-                                                                                                                                                                                        
+
     var reader_buf: [IO_BUF_SIZE]u8 = undefined;
     var file_reader = input_file.reader(&reader_buf);
     var reader = &file_reader.interface;
-                                                                                                                                                                                        
+
     var bank_list: std.ArrayList([]const u8) = .empty;
 
     while (true) {
@@ -66,7 +62,7 @@ fn readBanksFromFile(filepath: []const u8, allocator: std.mem.Allocator) !Banks 
 }
 
 fn calcMaxBankJoltage(
-    bank: []const u8, 
+    bank: []const u8,
     num_batteries: u8,
     allocator: Allocator,
 ) !u64 {
@@ -112,4 +108,3 @@ test "Example" {
     const total_output_joltage_p2 = try calcTotalOutputJoltage(TEST_INPUT_FILEPATH, allocator, 12);
     try std.testing.expect(total_output_joltage_p2 == 3121910778619);
 }
-

@@ -75,7 +75,7 @@ pub fn main() !void {
         const dial_result = turn_dial(curr_num, instruction);
         curr_num = dial_result[0];
         zero_clicks += dial_result[1];
-        
+
         if (curr_num == 0) {
             num_zeroes += 1;
         }
@@ -89,17 +89,17 @@ pub fn main() !void {
     try stdout_writer.flush();
 }
 
-fn turn_dial(curr_num: u8, instruction: Instruction) struct {u8, u8} { 
+fn turn_dial(curr_num: u8, instruction: Instruction) struct { u8, u8 } {
     const num_turns: u16 = instruction.num_turns;
     if (num_turns == 0) {
-        return .{curr_num, 0};
+        return .{ curr_num, 0 };
     }
 
     // Calculate full rotations and remaining turns
     const effective_turns: u8 = @truncate(num_turns % NUM_DIALS);
     var zero_clicks: u8 = @truncate(@divFloor(num_turns, NUM_DIALS));
     if (effective_turns == 0) {
-        return .{curr_num, zero_clicks};
+        return .{ curr_num, zero_clicks };
     }
 
     const new_num: u8 = if (instruction.direction == .left) left: {
@@ -117,5 +117,5 @@ fn turn_dial(curr_num: u8, instruction: Instruction) struct {u8, u8} {
         break :right @truncate(raw_turn_total % NUM_DIALS);
     };
 
-    return .{new_num, zero_clicks};
+    return .{ new_num, zero_clicks };
 }
