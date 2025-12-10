@@ -71,7 +71,7 @@ fn readInventoryFromFile(filepath: []const u8, allocator: Allocator) !InventoryD
 
     // Read available IDs
     var available_id_list: std.ArrayList(u64) = .empty;
-    while (reader.takeDelimiterExclusive('\n')) |id_str| { 
+    while (reader.takeDelimiterExclusive('\n')) |id_str| {
         reader.toss(1);
 
         const id = try std.fmt.parseInt(u64, id_str, 10);
@@ -82,7 +82,7 @@ fn readInventoryFromFile(filepath: []const u8, allocator: Allocator) !InventoryD
         }
     }
     const available_ids = try available_id_list.toOwnedSlice(allocator);
-    
+
     return .{ .fresh_id_ranges = id_range_tree, .available_ids = available_ids };
 }
 

@@ -142,7 +142,7 @@ const RangeTreeNode = struct {
         if (self.right) |right_node| {
             num_ids += right_node.countIDs();
         }
-        
+
         return num_ids;
     }
 };
