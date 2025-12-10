@@ -2,6 +2,8 @@ const std = @import("std");
 
 const TEST_INPUT_FILEPATH = "test.txt";
 const IO_BUF_SIZE: usize = 1024;
+const NUM_BATTERIES_P1 = 2;
+const NUM_BATTERIES_P2 = 12;
 
 const Banks = []const []const u8;
 const Allocator = std.mem.Allocator;
@@ -15,8 +17,8 @@ pub fn main() !void {
     _ = args.skip();
 
     const input_filepath = args.next() orelse return error.MissingArg;
-    const total_output_joltage_p1 = try calcTotalOutputJoltage(input_filepath, allocator, 2);
-    const total_output_joltage_p2 = try calcTotalOutputJoltage(input_filepath, allocator, 12);
+    const total_output_joltage_p1 = try calcTotalOutputJoltage(input_filepath, allocator, NUM_BATTERIES_P1);
+    const total_output_joltage_p2 = try calcTotalOutputJoltage(input_filepath, allocator, NUM_BATTERIES_P2);
 
     var writer_buf: [IO_BUF_SIZE]u8 = undefined;
     var stdout_file_writer = std.fs.File.stdout().writer(&writer_buf);
@@ -47,15 +49,15 @@ fn readBanksFromFile(filepath: []const u8, allocator: std.mem.Allocator) !Banks 
 
     var bank_list: std.ArrayList([]const u8) = .empty;
 
-    while (true) {
-        const bank_str = reader.takeDelimiterExclusive('\n') catch |err| {
-            if (err == error.EndOfStream) break;
-            return err;
-        };
+    while (reader.takeDelimiterExclusive('\n')) |bank_str| {
         reader.toss(1);
 
         const bank_dupe = try allocator.dupe(u8, bank_str);
         try bank_list.append(allocator, bank_dupe);
+    } else |err| {
+        if (err != error.EndOfStream) {
+            return err;
+        }
     }
 
     return try bank_list.toOwnedSlice(allocator);
@@ -102,9 +104,9 @@ test "Example" {
     defer arena.deinit();
     const allocator = arena.allocator();
 
-    const total_output_joltage_p1 = try calcTotalOutputJoltage(TEST_INPUT_FILEPATH, allocator, 2);
+    const total_output_joltage_p1 = try calcTotalOutputJoltage(TEST_INPUT_FILEPATH, allocator, NUM_BATTERIES_P1);
     try std.testing.expect(total_output_joltage_p1 == 357);
 
-    const total_output_joltage_p2 = try calcTotalOutputJoltage(TEST_INPUT_FILEPATH, allocator, 12);
+    const total_output_joltage_p2 = try calcTotalOutputJoltage(TEST_INPUT_FILEPATH, allocator, NUM_BATTERIES_P2);
     try std.testing.expect(total_output_joltage_p2 == 3121910778619);
 }
