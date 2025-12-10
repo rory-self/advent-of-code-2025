@@ -5,8 +5,11 @@ const TEST_INPUT_FILEPATH = "test.txt";
 const IO_BUF_SIZE: usize = 1024;
 
 const Allocator = std.mem.Allocator;
+const RangeTree = range_tree.RangeTree;
+const FreshIdRange = range_tree.FreshIdRange;
+
 const InventoryData = struct {
-    fresh_id_ranges: range_tree.RangeTree,
+    fresh_id_ranges: RangeTree,
     available_ids: []const u64,
 };
 
@@ -52,34 +55,34 @@ fn readInventoryFromFile(filepath: []const u8, allocator: Allocator) !InventoryD
     var file_reader = input_file.reader(&reader_buf);
     var reader = &file_reader.interface;
 
-    var id_range_tree: range_tree.RangeTree = .empty;
-    while (true) {
-        const range_str = try reader.takeDelimiterExclusive('\n');
+    // Read fresh ID ranges
+    var id_range_tree: RangeTree = .empty;
+    while (reader.takeDelimiterExclusive('\n')) |range_str| {
         reader.toss(1);
-
         if (range_str.len == 0) {
             break;
         }
 
-        const range = try range_tree.FreshRange.fromString(range_str);
+        const range = try FreshIdRange.fromString(range_str);
         try id_range_tree.insertRange(range, allocator);
+    } else |err| {
+        return err;
     }
 
+    // Read available IDs
     var available_id_list: std.ArrayList(u64) = .empty;
-    while (true) {
-        const id_str = reader.takeDelimiterExclusive('\n') catch |err| {
-            if (err == error.EndOfStream) {
-                break;
-            }
-            return err;
-        };
+    while (reader.takeDelimiterExclusive('\n')) |id_str| { 
         reader.toss(1);
 
         const id = try std.fmt.parseInt(u64, id_str, 10);
         try available_id_list.append(allocator, id);
+    } else |err| {
+        if (err != error.EndOfStream) {
+            return err;
+        }
     }
-
     const available_ids = try available_id_list.toOwnedSlice(allocator);
+    
     return .{ .fresh_id_ranges = id_range_tree, .available_ids = available_ids };
 }
 
