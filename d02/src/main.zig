@@ -15,85 +15,6 @@ const Pow = std.math.pow;
 // Types //
 const IdCategory = enum { valid, p1_invalid, p2_invalid };
 
-// Implementation //
-pub fn main() !void {
-    const id_sum_p1, const id_sum_p2 = try invalidIdSumsFromFile(INPUT_FILEPATH);
-
-    var writer_buf: [IO_BUF_SIZE]u8 = undefined;
-    var stdout_file_writer = std.fs.File.stdout().writer(&writer_buf);
-    var stdout_writer = &stdout_file_writer.interface;
-    try stdout_writer.print("Invalid ID sum is: {d} (Max 2 repeats)\n", .{id_sum_p1});
-    try stdout_writer.print("Invalid ID sum is: {d} (Unlimited repeats)\n", .{id_sum_p2});
-    try stdout_writer.flush();
-}
-
-/// Given a valid path to a file storing the puzzle input, calculates and returns the invalid id
-/// sums for each part.
-fn invalidIdSumsFromFile(filepath: []const u8) !struct { u64, u64 } {
-    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
-    defer arena.deinit();
-    const allocator = arena.allocator();
-
-    const id_ranges: []const IdRange = try idRangesFromFile(filepath, allocator);
-    defer allocator.free(id_ranges);
-
-    // Instantiate a map that tracks applicable pattern lengths for a given
-    // number of digits. i.e. all factors of the number of digits.
-    var pattern_lens_by_digits = DigitPatternLenMap.init(allocator);
-    defer pattern_lens_by_digits.deinit();
-
-    var total_sum_p1: u64 = 0;
-    var total_sum_p2: u64 = 0;
-    for (id_ranges) |id_range| {
-        const sum_p1, const sum_p2 = try id_range.calcInvalidIdSums(&pattern_lens_by_digits, allocator);
-        total_sum_p1 += sum_p1;
-        total_sum_p2 += sum_p2;
-    }
-
-    return .{ total_sum_p1, total_sum_p2 };
-}
-
-/// Given a valid path to a file containing the puzzle input, returns a slice containing all the
-/// id ranges to check formatted into IdRange structs. Requires valid allocator parameter.
-fn idRangesFromFile(filepath: []const u8, allocator: Allocator) ![]const IdRange {
-    var input_file = try std.fs.cwd().openFile(filepath, .{ .mode = .read_only });
-    defer input_file.close();
-
-    var reader_buf: [IO_BUF_SIZE]u8 = undefined;
-    var file_reader = input_file.reader(&reader_buf);
-    var reader = &file_reader.interface;
-
-    var id_range_list: std.ArrayList(IdRange) = .empty;
-    errdefer id_range_list.deinit(allocator);
-
-    while (true) {
-        const range_str: []u8 = reader.takeDelimiterExclusive(',') catch |err| {
-            if (err == error.EndOfStream) {
-                break;
-            }
-            return err;
-        };
-        const range_str_len = if (file_reader.atEnd()) end: {
-            break :end range_str.len - 1;
-        } else not_end: {
-            reader.toss(1);
-            break :not_end range_str.len;
-        };
-
-        const separator_index: usize = std.mem.indexOf(u8, range_str, "-") orelse return error.MissingDelimiter;
-        const min_id = range_str[0..separator_index];
-        const max_id = range_str[separator_index + 1 .. range_str_len];
-
-        const min_val = try std.fmt.parseInt(u64, min_id, 10);
-        const max_val = try std.fmt.parseInt(u64, max_id, 10);
-
-        const id_range = IdRange{ .min_id = min_val, .max_id = max_val };
-        try id_range_list.append(allocator, id_range);
-    }
-
-    return try id_range_list.toOwnedSlice(allocator);
-}
-
 const IdRange = struct {
     min_id: u64,
     max_id: u64,
@@ -136,6 +57,79 @@ const IdRange = struct {
     }
 };
 
+// Implementation //
+pub fn main() !void {
+    const id_sum_p1, const id_sum_p2 = try invalidIdSumsFromFile(INPUT_FILEPATH);
+
+    var writer_buf: [IO_BUF_SIZE]u8 = undefined;
+    var stdout_file_writer = std.fs.File.stdout().writer(&writer_buf);
+    var stdout_writer = &stdout_file_writer.interface;
+    try stdout_writer.print("Invalid ID sum is: {d} (Max 2 repeats)\n", .{id_sum_p1});
+    try stdout_writer.print("Invalid ID sum is: {d} (Unlimited repeats)\n", .{id_sum_p2});
+    try stdout_writer.flush();
+}
+
+/// Given a valid path to a file storing the puzzle input, calculates and returns the invalid id
+/// sums for each part.
+fn invalidIdSumsFromFile(filepath: []const u8) !struct { u64, u64 } {
+    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const id_ranges: []const IdRange = try idRangesFromFile(filepath, allocator);
+
+    // Instantiate a map that tracks applicable pattern lengths for a given
+    // number of digits. i.e. all factors of the number of digits.
+    var pattern_lens_by_digits = DigitPatternLenMap.init(allocator);
+
+    var total_sum_p1: u64 = 0;
+    var total_sum_p2: u64 = 0;
+    for (id_ranges) |id_range| {
+        const sum_p1, const sum_p2 = try id_range.calcInvalidIdSums(&pattern_lens_by_digits, allocator);
+        total_sum_p1 += sum_p1;
+        total_sum_p2 += sum_p2;
+    }
+
+    return .{ total_sum_p1, total_sum_p2 };
+}
+
+/// Given a valid path to a file containing the puzzle input, returns a slice containing all the
+/// id ranges to check formatted into IdRange structs. Requires valid allocator parameter.
+fn idRangesFromFile(filepath: []const u8, allocator: Allocator) ![]const IdRange {
+    var input_file = try std.fs.cwd().openFile(filepath, .{ .mode = .read_only });
+    defer input_file.close();
+
+    var reader_buf: [IO_BUF_SIZE]u8 = undefined;
+    var file_reader = input_file.reader(&reader_buf);
+    var reader = &file_reader.interface;
+
+    var id_range_list: std.ArrayList(IdRange) = .empty;
+    while (reader.takeDelimiterExclusive(',')) |range_str| {
+        const range_str_len = if (file_reader.atEnd()) at_eof: {
+            break :at_eof range_str.len - 1;
+        } else not_eof: {
+            reader.toss(1);
+            break :not_eof range_str.len;
+        };
+
+        const separator_index: usize = std.mem.indexOf(u8, range_str, "-") orelse return error.MissingDelimiter;
+        const min_id = range_str[0..separator_index];
+        const max_id = range_str[separator_index + 1 .. range_str_len];
+
+        const min_val = try std.fmt.parseInt(u64, min_id, 10);
+        const max_val = try std.fmt.parseInt(u64, max_id, 10);
+
+        const id_range = IdRange{ .min_id = min_val, .max_id = max_val };
+        try id_range_list.append(allocator, id_range);
+    } else |err| {
+        if (err != error.EndOfStream) {
+            return err;
+        }
+    }
+
+    return try id_range_list.toOwnedSlice(allocator);
+}
+
 fn countDigits(num: u64) u8 {
     var num_digits: u8 = 0;
     var mutated_num = num;
@@ -161,15 +155,13 @@ fn calcPossiblePatternLengths(num_digits: usize, allocator: Allocator) ![]usize 
 
 fn checkId(id: u64, num_digits: usize, pattern_lengths: []const usize, allocator: Allocator) !IdCategory {
     const digits: []const u8 = try collectDigits(id, num_digits, allocator);
-    defer allocator.free(digits);
 
     var i: usize = pattern_lengths.len;
     while (i > 0) {
         i -= 1;
 
         const pattern_length = pattern_lengths[i];
-        var sampled_pattern = try allocator.alloc(usize, pattern_length);
-        defer allocator.free(sampled_pattern);
+        var sampled_pattern = try allocator.alloc(u8, pattern_length);
 
         for (0..pattern_length) |j| {
             sampled_pattern[j] = digits[j];
@@ -178,7 +170,7 @@ fn checkId(id: u64, num_digits: usize, pattern_lengths: []const usize, allocator
         var curr_pattern_pos: usize = 0;
         var pattern_matches: bool = true;
         for (pattern_length..digits.len) |j| {
-            const pattern_digit: u8 = @truncate(sampled_pattern[curr_pattern_pos]);
+            const pattern_digit: u8 = sampled_pattern[curr_pattern_pos];
             if (pattern_digit != digits[j]) {
                 pattern_matches = false;
                 break;
