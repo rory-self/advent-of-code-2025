@@ -1,8 +1,9 @@
 const std = @import("std");
 
+// Constants //
 const TEST_INPUT_FILEPATH = "test.txt";
 const IO_BUF_SIZE: usize = 1024;
-const MAX_ROLLS: u3 = 4;
+const ACCESSIBILITY_THRESHOLD: u3 = 4;
 const DIRECTIONS: [8][2]i2 = .{
     .{ -1, -1 },
     .{ -1, 0 },
@@ -14,6 +15,7 @@ const DIRECTIONS: [8][2]i2 = .{
     .{ 1, 1 },
 };
 
+// Types and Aliases //
 const Space = enum {
     empty,
     roll,
@@ -29,6 +31,7 @@ const Space = enum {
 const SpaceGrid = [][]Space;
 const Allocator = std.mem.Allocator;
 
+// Implementation //
 pub fn main() !void {
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
     defer arena.deinit();
@@ -57,13 +60,14 @@ fn calcClearableRolls(input_filepath: []const u8, allocator: Allocator) !struct 
 
     const initial_rolls_removed = try clearRolls(&grid, allocator);
     var total_rolls_removed = initial_rolls_removed;
-    while (true) {
-        const last_rolls_removed = try clearRolls(&grid, allocator);
-        total_rolls_removed += last_rolls_removed;
+    while (clearRolls(&grid, allocator)) |rolls_removed| {
+        total_rolls_removed += rolls_removed;
 
-        if (last_rolls_removed == 0) {
+        if (rolls_removed == 0) {
             return .{ initial_rolls_removed, total_rolls_removed };
         }
+    } else |err| {
+        return err;
     }
 
     unreachable;
@@ -78,13 +82,7 @@ fn readGridFromFile(filepath: []const u8, allocator: Allocator) !SpaceGrid {
     var reader = &file_reader.interface;
 
     var space_grid: std.ArrayList([]Space) = .empty;
-    while (true) {
-        const line = reader.takeDelimiterExclusive('\n') catch |err| {
-            if (err == error.EndOfStream) {
-                break;
-            }
-            return err;
-        };
+    while (reader.takeDelimiterExclusive('\n')) |line| {
         reader.toss(1);
 
         var spaces = try allocator.alloc(Space, line.len);
@@ -93,6 +91,10 @@ fn readGridFromFile(filepath: []const u8, allocator: Allocator) !SpaceGrid {
         }
 
         try space_grid.append(allocator, spaces);
+    } else |err| {
+        if (err != error.EndOfStream) {
+            return err;
+        }
     }
 
     return try space_grid.toOwnedSlice(allocator);
@@ -124,12 +126,12 @@ fn clearRolls(grid: *SpaceGrid, allocator: Allocator) !u16 {
 fn isRollAccessible(
     row: usize,
     col: usize,
-    grid: SpaceGrid,
+    grid: []const []const Space,
     num_col: usize,
 ) bool {
     var num_rolls: u8 = 0;
     for (DIRECTIONS, 0..) |direction, i| {
-        if (DIRECTIONS.len - i < MAX_ROLLS - num_rolls) {
+        if (DIRECTIONS.len - i < ACCESSIBILITY_THRESHOLD - num_rolls) {
             break;
         }
 
@@ -141,7 +143,7 @@ fn isRollAccessible(
 
         if (grid[new_row][new_col] == .roll) {
             num_rolls += 1;
-            if (num_rolls == MAX_ROLLS) {
+            if (num_rolls == ACCESSIBILITY_THRESHOLD) {
                 return false;
             }
         }
