@@ -6,6 +6,7 @@ const SPLITTER_CHARACTER = '^';
 const IO_BUF_SIZE = 128;
 
 const Allocator = std.mem.Allocator;
+const BeamMap = std.AutoArrayHashMap(usize, u64);
 
 pub fn main() !void {
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
@@ -16,17 +17,18 @@ pub fn main() !void {
     _ = args.skip();
     const input_filepath = args.next() orelse return error.MissingArgument;
 
-    const beam_splits = try calculateBeamSplits(input_filepath, allocator);
+    const beam_splits, const timelines = try simulateBeamSplits(input_filepath, allocator);
 
     const stdout_file = std.fs.File.stdout();
     var writer_buf: [IO_BUF_SIZE]u8 = undefined;
     var stdout_writer = stdout_file.writer(&writer_buf);
     const stdout_interface = &stdout_writer.interface;
     try stdout_interface.print("{d} beam splits.\n", .{beam_splits});
+    try stdout_interface.print("{d} timelines.\n", .{timelines});
     try stdout_interface.flush();
 }
 
-fn calculateBeamSplits(input_filepath: []const u8, allocator: Allocator) !u16 {
+fn simulateBeamSplits(input_filepath: []const u8, allocator: Allocator) !struct { u16, u64 } {
     const file = try std.fs.cwd().openFile(input_filepath, .{ .mode = .read_only });
     defer file.close();
 
@@ -38,33 +40,48 @@ fn calculateBeamSplits(input_filepath: []const u8, allocator: Allocator) !u16 {
     const start_pos = find_start: while (line_it.next()) |line| {
         if (std.mem.indexOfScalar(u8, line, START_CHARACTER)) |pos| {
             break :find_start pos;
-        } 
+        }
     } else {
         return error.NoStart;
     };
 
-    var beam_positions: std.AutoArrayHashMap(usize, void) = .init(allocator);
-    try beam_positions.put(start_pos, {});
+    var beam_map: BeamMap = .init(allocator);
+    try beam_map.put(start_pos, 1);
 
     var beam_splits: u16 = 0;
     while (line_it.next()) |line| {
-        const curr_beam_positions = try allocator.dupe(usize, beam_positions.keys()); 
+        const curr_beam_positions = try allocator.dupe(usize, beam_map.keys());
+        const incident_timelines = try allocator.dupe(u64, beam_map.values());
 
-        for (curr_beam_positions) |beam_pos| {
+        for (curr_beam_positions, incident_timelines) |beam_pos, prev_timelines| {
             if (line[beam_pos] != SPLITTER_CHARACTER) {
                 continue;
             }
 
-            try beam_positions.put(beam_pos - 1, {});
-            try beam_positions.put(beam_pos + 1, {});
-            if (!beam_positions.swapRemove(beam_pos)) {
+            try beamMapInsert(&beam_map, beam_pos - 1, prev_timelines);
+            try beamMapInsert(&beam_map, beam_pos + 1, prev_timelines);
+            if (!beam_map.swapRemove(beam_pos)) {
                 return error.ArrayHashMapFail;
             }
             beam_splits += 1;
         }
     }
 
-    return beam_splits;
+    var timelines: u64 = 0;
+    for (beam_map.values()) |beam_timelines| {
+        timelines += beam_timelines;
+    }
+
+    return .{ beam_splits, timelines };
+}
+
+fn beamMapInsert(beam_map: *BeamMap, beam_pos: usize, new_timelines: u64) !void {
+    if (beam_map.get(beam_pos)) |curr_timelines| {
+        try beam_map.put(beam_pos, new_timelines + curr_timelines);
+        return;
+    }
+
+    try beam_map.putNoClobber(beam_pos, new_timelines);
 }
 
 test "Example" {
@@ -72,7 +89,7 @@ test "Example" {
     defer arena.deinit();
     const allocator = arena.allocator();
 
-    const beam_splits = try calculateBeamSplits(TEST_INPUT_PATH, allocator);
+    const beam_splits, const timelines = try simulateBeamSplits(TEST_INPUT_PATH, allocator);
     try std.testing.expect(beam_splits == 21);
+    try std.testing.expect(timelines == 40);
 }
-
