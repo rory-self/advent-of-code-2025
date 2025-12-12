@@ -1,4 +1,5 @@
 const std = @import("std");
+const utils = @import("utils");
 
 const TEST_INPUT_PATH = "test.txt";
 const START_CHARACTER = 'S';
@@ -13,28 +14,14 @@ pub fn main() !void {
     defer arena.deinit();
     const allocator = arena.allocator();
 
-    var args = try std.process.argsWithAllocator(allocator);
-    _ = args.skip();
-    const input_filepath = args.next() orelse return error.MissingArgument;
-
+    const input_filepath = try utils.getFilepathArg(allocator);
     const beam_splits, const timelines = try simulateBeamSplits(input_filepath, allocator);
 
-    const stdout_file = std.fs.File.stdout();
-    var writer_buf: [IO_BUF_SIZE]u8 = undefined;
-    var stdout_writer = stdout_file.writer(&writer_buf);
-    const stdout_interface = &stdout_writer.interface;
-    try stdout_interface.print("{d} beam splits.\n", .{beam_splits});
-    try stdout_interface.print("{d} timelines.\n", .{timelines});
-    try stdout_interface.flush();
+    try utils.printToStdout("{d} beam splits. {d} timelines\n", .{ beam_splits, timelines });
 }
 
 fn simulateBeamSplits(input_filepath: []const u8, allocator: Allocator) !struct { u16, u64 } {
-    const file = try std.fs.cwd().openFile(input_filepath, .{ .mode = .read_only });
-    defer file.close();
-
-    const file_length = try file.getEndPos();
-    const file_contents = try allocator.alloc(u8, file_length);
-    _ = try file.readAll(file_contents);
+    const file_contents = try utils.readAllFromFile(input_filepath, allocator);
 
     var line_it = std.mem.tokenizeScalar(u8, file_contents, '\n');
     const start_pos = find_start: while (line_it.next()) |line| {
@@ -46,7 +33,7 @@ fn simulateBeamSplits(input_filepath: []const u8, allocator: Allocator) !struct 
     };
 
     var beam_map: BeamMap = .init(allocator);
-    try beam_map.put(start_pos, 1);
+    try beam_map.putNoClobber(start_pos, 1);
 
     var beam_splits: u16 = 0;
     while (line_it.next()) |line| {
