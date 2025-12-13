@@ -56,7 +56,7 @@ fn simulateBeamSplits(input_filepath: []const u8, allocator: Allocator) !struct 
     return .{ beam_splits, timelines };
 }
 
-fn findStartPos(line_it: *std.mem.TokenIterator([]const u8)) ?usize {
+fn findStartPos(line_it: *std.mem.TokenIterator(u8, std.mem.DelimiterType.scalar)) ?usize {
    while (line_it.next()) |line| {
         if (std.mem.indexOfScalar(u8, line, START_CHARACTER)) |pos| {
             return pos;
