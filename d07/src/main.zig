@@ -24,13 +24,7 @@ fn simulateBeamSplits(input_filepath: []const u8, allocator: Allocator) !struct 
     const file_contents = try utils.readAllFromFile(input_filepath, allocator);
 
     var line_it = std.mem.tokenizeScalar(u8, file_contents, '\n');
-    const start_pos = find_start: while (line_it.next()) |line| {
-        if (std.mem.indexOfScalar(u8, line, START_CHARACTER)) |pos| {
-            break :find_start pos;
-        }
-    } else {
-        return error.NoStart;
-    };
+    const start_pos = findStartPos(&line_it) orelse return error.NoStart;
 
     var beam_map: BeamMap = .init(allocator);
     try beam_map.putNoClobber(start_pos, 1);
@@ -60,6 +54,16 @@ fn simulateBeamSplits(input_filepath: []const u8, allocator: Allocator) !struct 
     }
 
     return .{ beam_splits, timelines };
+}
+
+fn findStartPos(line_it: *std.mem.TokenIterator([]const u8)) ?usize {
+   while (line_it.next()) |line| {
+        if (std.mem.indexOfScalar(u8, line, START_CHARACTER)) |pos| {
+            return pos;
+        }
+   }
+
+   return null;
 }
 
 fn beamMapInsert(beam_map: *BeamMap, beam_pos: usize, new_timelines: u64) !void {
