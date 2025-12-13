@@ -1,9 +1,11 @@
 const std = @import("std");
+const utils = @import("utils");
 
 const IO_BUF_SIZE: usize = 128;
 const TEST_INPUT_FILEPATH = "test.txt";
 
 const Allocator = std.mem.Allocator;
+const TermType = u16;
 const Operator = enum {
     multiply,
     add,
@@ -18,44 +20,35 @@ const Operator = enum {
 };
 
 const Problem = struct {
-    numbers: std.ArrayList(u32) = .empty,
-    operator: Operator,
+    numbers: []const TermType,
+    operator: Operator = .add,
 
     fn eval(self: *const Problem) u128 {
-        var answer: u128 = 1;
-        for (self.numbers.items) |number| {
+        if (self.numbers.len == 0) {
+            return 0;
+        }
+
+        var answer = @as(u128, self.numbers[0]);
+        for (self.numbers[1..]) |number| {
+            const padded_num = @as(u128, number);
             switch (self.operator) {
-                .add => answer += number,
-                .multiply => answer *= number,
+                .add => answer += padded_num,
+                .multiply => answer *= padded_num,
             }
         }
-
-        if (self.operator == .add) {
-            answer -= 1;
-        }
-
         return answer;
     }
 };
-const Problems = []const Problem;
 
 pub fn main() !void {
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
 
-    var args = try std.process.argsWithAllocator(allocator);
-    _ = args.skip();
-    const input_filepath = args.next() orelse return error.MissingArg;
-
+    const input_filepath = try utils.getFilepathArg(allocator);
     const answer_total, const ceph_answer = try calcAnswerTotal(input_filepath, allocator);
 
-    var writer_buf: [IO_BUF_SIZE]u8 = undefined;
-    var stdout_file_writer = std.fs.File.stdout().writer(&writer_buf);
-    var stdout_writer = &stdout_file_writer.interface;
-    try stdout_writer.print("Answer sum is: {d}\n", .{answer_total});
-    try stdout_writer.print("Ceph sum is: {}\n", .{ceph_answer});
-    try stdout_writer.flush();
+    try utils.printToStdout("Total sum: {d}. Cephalopod sum: {d}\n", .{ answer_total, ceph_answer });
 }
 
 fn calcAnswerTotal(input_filepath: []const u8, allocator: Allocator) !struct { u128, u128 } {
@@ -69,97 +62,58 @@ fn calcAnswerTotal(input_filepath: []const u8, allocator: Allocator) !struct { u
     return .{ answer_sum, 0 };
 }
 
-fn readProblemsFromFile(
-    filepath: []const u8,
-    allocator: Allocator,
-) !struct { Problems, Problems } {
-    var file = try std.fs.cwd().openFile(filepath, .{ .mode = .read_only });
-    defer file.close();
-    var reader_buf: [IO_BUF_SIZE]u8 = undefined;
-    var reader = file.reader(&reader_buf);
-
-    const normal_problems = try readNormalProblems(&reader, allocator);
-    const cephalopod_problems: Problems = undefined;
+fn readProblemsFromFile(filepath: []const u8, allocator: Allocator) ![2][]const Problem {
+    const file_contents = try utils.readAllFromFile(filepath, allocator);
+    const normal_problems = try readNormalProblems(file_contents, allocator);
+    const cephalopod_problems: []const Problem = undefined;
 
     return .{ normal_problems, cephalopod_problems };
 }
 
-fn readNormalProblems(reader: *std.fs.File.Reader, allocator: Allocator) !Problems {
-    const max_digits = try countMaxDigits(reader);
-    const line_length = try countLineLength(reader);
-    const num_problems = line_length / (max_digits + 1);
+fn readNormalProblems(input: []const u8, allocator: Allocator) ![]const Problem {
+    var line_it = std.mem.splitScalar(u8, input, '\n');
+    const first_line = line_it.peek() orelse return error.EmptyInput;
+    const num_problems = countProblems(first_line);
 
-    const interface = &reader.interface;
-    const problems = try allocator.alloc(Problem, num_problems);
-    for (0..problems.len) |i| {
-        try reader.seekTo(i * (max_digits + 1));
-        problems[i].numbers = .empty;
+    var terms_by_problem = try allocator.alloc(std.ArrayList(TermType), num_problems);
+    for (0..num_problems) |i| {
+        terms_by_problem[i] = .empty;
+    }
 
-        while (true) {
-            const first_char = try interface.peekByte();
-            if (Operator.fromChar(first_char)) |operator| {
+    var problems = try allocator.alloc(Problem, num_problems);
+    while (line_it.next()) |line| {
+        if (line.len == 0) {
+            break;
+        }
+
+        var term_it = std.mem.tokenizeScalar(u8, line, ' ');
+        for (0..num_problems) |i| {
+            const term = term_it.next().?;
+            if (Operator.fromChar(term[0])) |operator| {
                 problems[i].operator = operator;
-                break;
+                continue;
             } else |_| {}
 
-            const term = try allocator.alloc(u8, max_digits);
-            for (0..max_digits) |j| {
-                term[j] = try interface.takeByte();
-            }
-
-            const trimmed_term = std.mem.trim(u8, term, " ");
-            const parsed_num = try std.fmt.parseInt(u32, trimmed_term, 10);
-            try problems[i].numbers.append(allocator, parsed_num);
-
-            const next_num_offset: i64 = @intCast(line_length - max_digits);
-            try reader.seekBy(next_num_offset);
+            const parsed_num = try std.fmt.parseInt(TermType, term, 10);
+            try terms_by_problem[i].append(allocator, parsed_num);
         }
+    }
+
+    for (0..num_problems) |i| {
+        problems[i].numbers = try terms_by_problem[i].toOwnedSlice(allocator);
     }
 
     return problems;
 }
 
-fn countMaxDigits(reader: *std.fs.File.Reader) !usize {
-    const interface = &reader.interface;
-
-    var num_digits: usize = 0;
-    var hit_digit = false;
-    while (interface.takeByte()) |char| {
-        if (char == '\n') {
-            break;
-        }
-
-        if (char != ' ') {
-            hit_digit = true;
-        } else if (hit_digit) {
-            break;
-        }
-
-        num_digits += 1;
-    } else |err| {
-        return err;
+fn countProblems(line: []const u8) usize {
+    var term_it = std.mem.tokenizeScalar(u8, line, ' ');
+    
+    var num_problems: usize = 0;
+    while (term_it.next()) |_| {
+        num_problems += 1;
     }
-
-    try reader.seekTo(0);
-    return num_digits;
-}
-
-fn countLineLength(reader: *std.fs.File.Reader) !usize {
-    const interface = &reader.interface;
-
-    var line_length: usize = 0;
-    while (interface.takeByte()) |char| {
-        line_length += 1;
-
-        if (char == '\n') {
-            break;
-        }
-    } else |err| {
-        return err;
-    }
-
-    try reader.seekTo(0);
-    return line_length;
+    return num_problems;
 }
 
 test "Example" {
