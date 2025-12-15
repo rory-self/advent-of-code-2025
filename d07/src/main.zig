@@ -1,7 +1,7 @@
 const std = @import("std");
 const utils = @import("utils");
 
-const TEST_INPUT_PATH = "test.txt";
+const TEST_FILEPATH = "test-inputs/d07.txt";
 const START_CHARACTER = 'S';
 const SPLITTER_CHARACTER = '^';
 const IO_BUF_SIZE = 128;
@@ -24,7 +24,7 @@ pub fn main() !void {
 
     const sim_result = try simulateBeamSplits(input_filepath, allocator);
     const num_splits = sim_result.num_splits;
-    const num_timelines = sim_result.num_timelines; 
+    const num_timelines = sim_result.num_timelines;
 
     try utils.printToStdout("{d} beam splits. {d} timelines\n", .{ num_splits, num_timelines });
 }
@@ -66,13 +66,13 @@ fn simulateBeamSplits(input_filepath: []const u8, allocator: Allocator) !BeamSim
 }
 
 fn findStartPos(line_it: *std.mem.TokenIterator(u8, std.mem.DelimiterType.scalar)) ?usize {
-   while (line_it.next()) |line| {
+    while (line_it.next()) |line| {
         if (std.mem.indexOfScalar(u8, line, START_CHARACTER)) |pos| {
             return pos;
         }
-   }
+    }
 
-   return null;
+    return null;
 }
 
 fn beamMapInsert(beam_map: *BeamMap, beam_pos: usize, new_timelines: NumTimelinesType) !void {
@@ -89,7 +89,7 @@ test "Example" {
     defer arena.deinit();
     const allocator = arena.allocator();
 
-    const sim_result = try simulateBeamSplits(TEST_INPUT_PATH, allocator);
+    const sim_result = try simulateBeamSplits(TEST_FILEPATH, allocator);
     try std.testing.expect(sim_result.num_splits == 21);
     try std.testing.expect(sim_result.num_timelines == 40);
 }

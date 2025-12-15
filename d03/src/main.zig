@@ -1,6 +1,6 @@
 const std = @import("std");
 
-const TEST_INPUT_FILEPATH = "test.txt";
+const TEST_FILEPATH = "test-inputs/d03.txt";
 const IO_BUF_SIZE: usize = 1024;
 const NUM_BATTERIES_P1 = 2;
 const NUM_BATTERIES_P2 = 12;
@@ -104,9 +104,9 @@ test "Example" {
     defer arena.deinit();
     const allocator = arena.allocator();
 
-    const total_output_joltage_p1 = try calcTotalOutputJoltage(TEST_INPUT_FILEPATH, allocator, NUM_BATTERIES_P1);
+    const total_output_joltage_p1 = try calcTotalOutputJoltage(TEST_FILEPATH, allocator, NUM_BATTERIES_P1);
     try std.testing.expect(total_output_joltage_p1 == 357);
 
-    const total_output_joltage_p2 = try calcTotalOutputJoltage(TEST_INPUT_FILEPATH, allocator, NUM_BATTERIES_P2);
+    const total_output_joltage_p2 = try calcTotalOutputJoltage(TEST_FILEPATH, allocator, NUM_BATTERIES_P2);
     try std.testing.expect(total_output_joltage_p2 == 3121910778619);
 }

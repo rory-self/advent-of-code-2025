@@ -1,9 +1,9 @@
 //! 'Advent of Code' day 2 solution by Rory Self
 const std = @import("std");
+const utils = @import("utils");
 
 // Constants //
-const INPUT_FILEPATH = "input.txt";
-const TEST_FILEPATH = "test.txt";
+const TEST_FILEPATH = "test-inputs/d02.txt";
 const IO_BUF_SIZE: usize = 1024;
 
 // Aliases //
@@ -19,7 +19,7 @@ const IdRange = struct {
     min_id: u64,
     max_id: u64,
 
-    fn calcInvalidIdSums(self: *const IdRange, pattern_lengths_by_digit: *DigitPatternLenMap, allocator: Allocator) !struct { u64, u64 } {
+    fn sumInvalidIds(self: *const IdRange, pattern_len_by_digit: *DigitPatternLenMap, allocator: Allocator) ![2]u64 {
         const min_digits: u8 = countDigits(self.min_id);
         const max_digits: u8 = countDigits(self.max_id);
 
@@ -30,7 +30,7 @@ const IdRange = struct {
                 continue;
             }
 
-            const digit_length_pair = try pattern_lengths_by_digit.getOrPut(i);
+            const digit_length_pair = try pattern_len_by_digit.getOrPut(i);
             const length_ptr = digit_length_pair.value_ptr;
             if (!digit_length_pair.found_existing) {
                 length_ptr.* = try calcPossiblePatternLengths(i, allocator);
@@ -59,23 +59,19 @@ const IdRange = struct {
 
 // Implementation //
 pub fn main() !void {
-    const id_sum_p1, const id_sum_p2 = try invalidIdSumsFromFile(INPUT_FILEPATH);
-
-    var writer_buf: [IO_BUF_SIZE]u8 = undefined;
-    var stdout_file_writer = std.fs.File.stdout().writer(&writer_buf);
-    var stdout_writer = &stdout_file_writer.interface;
-    try stdout_writer.print("Invalid ID sum is: {d} (Max 2 repeats)\n", .{id_sum_p1});
-    try stdout_writer.print("Invalid ID sum is: {d} (Unlimited repeats)\n", .{id_sum_p2});
-    try stdout_writer.flush();
-}
-
-/// Given a valid path to a file storing the puzzle input, calculates and returns the invalid id
-/// sums for each part.
-fn invalidIdSumsFromFile(filepath: []const u8) !struct { u64, u64 } {
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
 
+    const input_filepath = try utils.getFilepathArg(allocator);
+    const id_sum_p1, const id_sum_p2 = try invalidIdSumsFromFile(input_filepath, allocator);
+
+    try utils.printToStdout("2 repeat sum: {d} Unlimited repeat sum: {d}\n", .{ id_sum_p1, id_sum_p2 });
+}
+
+/// Given a valid path to a file storing the puzzle input, calculates and returns the invalid id
+/// sums for each part.
+fn invalidIdSumsFromFile(filepath: []const u8, allocator: Allocator) ![2]u64 {
     const id_ranges: []const IdRange = try idRangesFromFile(filepath, allocator);
 
     // Instantiate a map that tracks applicable pattern lengths for a given
@@ -85,7 +81,7 @@ fn invalidIdSumsFromFile(filepath: []const u8) !struct { u64, u64 } {
     var total_sum_p1: u64 = 0;
     var total_sum_p2: u64 = 0;
     for (id_ranges) |id_range| {
-        const sum_p1, const sum_p2 = try id_range.calcInvalidIdSums(&pattern_lens_by_digits, allocator);
+        const sum_p1, const sum_p2 = try id_range.sumInvalidIds(&pattern_lens_by_digits, allocator);
         total_sum_p1 += sum_p1;
         total_sum_p2 += sum_p2;
     }
@@ -200,9 +196,12 @@ fn collectDigits(num: u64, num_digits: usize, allocator: Allocator) ![]const u8 
     return digits;
 }
 
-// Tests //
 test "Example Test" {
-    const p1_sum, const p2_sum = try invalidIdSumsFromFile(TEST_FILEPATH);
+    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const p1_sum, const p2_sum = try invalidIdSumsFromFile(TEST_FILEPATH, allocator);
     try std.testing.expect(p1_sum == 1227775554);
     try std.testing.expect(p2_sum == 4174379265);
 }

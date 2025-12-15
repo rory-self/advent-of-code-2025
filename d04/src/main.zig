@@ -1,7 +1,7 @@
 const std = @import("std");
 
 // Constants //
-const TEST_INPUT_FILEPATH = "test.txt";
+const TEST_FILEPATH = "test-inputs/d04.txt";
 const IO_BUF_SIZE: usize = 1024;
 const ACCESSIBILITY_THRESHOLD: u3 = 4;
 const DIRECTIONS: [8][2]i2 = .{
@@ -169,7 +169,7 @@ test "Example" {
     defer arena.deinit();
     const allocator = arena.allocator();
 
-    const test_result = try calcClearableRolls(TEST_INPUT_FILEPATH, allocator);
+    const test_result = try calcClearableRolls(TEST_FILEPATH, allocator);
     const initially_accessible_rolls, const removed_rolls = test_result;
     try std.testing.expect(initially_accessible_rolls == 13);
     try std.testing.expect(removed_rolls == 43);

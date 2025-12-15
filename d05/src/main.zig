@@ -1,7 +1,7 @@
 const std = @import("std");
 const range_tree = @import("range_tree.zig");
 
-const TEST_INPUT_FILEPATH = "test.txt";
+const TEST_FILEPATH = "test-inputs/d05.txt";
 const IO_BUF_SIZE: usize = 1024;
 
 const Allocator = std.mem.Allocator;
@@ -91,7 +91,7 @@ test "Example" {
     defer arena.deinit();
     const allocator = arena.allocator();
 
-    const num_fresh, const possible_fresh = try countFreshIngredientIDs(TEST_INPUT_FILEPATH, allocator);
+    const num_fresh, const possible_fresh = try countFreshIngredientIDs(TEST_FILEPATH, allocator);
     try std.testing.expect(num_fresh == 3);
     try std.testing.expect(possible_fresh == 14);
 }
