@@ -1,4 +1,3 @@
 input.txt
 .zig-cache/
 zig-out/
-bin/
