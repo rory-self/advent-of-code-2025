@@ -1,8 +1,16 @@
 const std = @import("std");
+const builtin = @import("builtin");
 
 const NUM_DAYS = 8;
+const SemanticVersion = std.SemanticVersion;
 
 pub fn build(b: *std.Build) !void {
+    const zig_version = builtin.zig_version;
+    const project_zig_version = try SemanticVersion.parse("0.15.2");
+    if (versionsDoNotMatch(zig_version, project_zig_version)) {
+        return error.ZigVersionMismatch;
+    }
+
     const target = b.standardTargetOptions(.{});
     const optimize = .Debug;
 
@@ -13,9 +21,9 @@ pub fn build(b: *std.Build) !void {
     });
 
     for (1..NUM_DAYS + 1) |i| {
-        const day_string = b.fmt("d0{d}", .{ i });
-        const test_step_string = b.fmt("test{d}", .{ i });
-        const main_file_rel_path = b.fmt("src/{s}/main.zig", .{ day_string });
+        const day_string = b.fmt("d0{d}", .{i});
+        const test_step_string = b.fmt("test{d}", .{i});
+        const main_file_rel_path = b.fmt("src/{s}/main.zig", .{day_string});
 
         const main_module = b.createModule(.{
             .root_source_file = b.path(main_file_rel_path),
@@ -36,4 +44,8 @@ pub fn build(b: *std.Build) !void {
 
         b.installArtifact(exe);
     }
+}
+
+fn versionsDoNotMatch(v1: SemanticVersion, v2: SemanticVersion) bool {
+    return v1.major != v2.major or v1.minor != v2.minor or v1.patch != v2.patch;
 }

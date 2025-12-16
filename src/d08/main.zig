@@ -1,22 +1,29 @@
+// Modules //
 const std = @import("std");
 const utils = @import("utils");
 
 // Constants //
-const TEST_FILEPATH = "test.txt";
-const NUM_CONNECTIONS_TO_MAKE = 1000;
+const TEST_FILEPATH = "test-inputs/d08.txt";
+const NUM_CONNECTIONS = 1000;
 const NUM_CIRCUITS_TO_MULTIPLY = 3;
 
 // Types //
+const Coordinate = u32;
+const DistanceType = utils.UpgradeBitWidth(Coordinate, 1);
+const Coordinates = [3]Coordinate;
 const Connection = struct {
-    distance: u32,
+    distance: DistanceType,
     box_ids: [2]usize,
 };
 const ConnectionQueue = std.PriorityQueue(Connection, void, compareByDistance);
-const Coordinate = u16;
-const Coordinates = [3]Coordinate;
 const Circuit = []const usize;
 const CircuitByIdMap = std.AutoHashMap(usize, std.ArrayList(usize));
 const Allocator = std.mem.Allocator;
+const NetworkParameters = struct {
+    circuit_by_id: *CircuitByIdMap,
+    circuit_id_by_box: []?usize,
+    allocator: Allocator,
+};
 
 // Implementation //
 pub fn main() !void {
@@ -25,21 +32,22 @@ pub fn main() !void {
     const allocator = arena.allocator();
 
     const input_filepath = try utils.getFilepathArg(allocator);
-    const p1_result = try simulateConnections(input_filepath, allocator);
+    const p1_result = try simulateConnections(input_filepath, NUM_CONNECTIONS, allocator);
 
-    try utils.printToStdout("Part 1 result: {}\n", .{ p1_result });
+    try utils.printToStdout("Part 1 result: {}\n", .{p1_result});
 }
 
 fn simulateConnections(
     input_filepath: []const u8,
+    num_connections: usize,
     allocator: Allocator,
 ) !usize {
     const box_coords = try boxCoordsFromFile(input_filepath, allocator);
-    const connections = try collectShortestConnections(box_coords, allocator);
-    
+    const connections = try collectShortestConnections(box_coords, num_connections, allocator);
+
     const circuits = try formCircuits(connections, box_coords.len, allocator);
     std.mem.sort(Circuit, circuits, {}, compareCircuitSize);
-    
+
     var size_result: usize = 1;
     for (0..NUM_CIRCUITS_TO_MULTIPLY) |i| {
         size_result *= circuits[i].len;
@@ -54,7 +62,7 @@ fn compareCircuitSize(_: void, lhs: Circuit, rhs: Circuit) bool {
 
 fn boxCoordsFromFile(filepath: []const u8, allocator: Allocator) ![]const Coordinates {
     const file_contents = try utils.readAllFromFile(filepath, allocator);
-    
+
     var line_it = std.mem.splitScalar(u8, file_contents, '\n');
     var box_coords: std.ArrayList(Coordinates) = .empty;
     while (line_it.next()) |line| {
@@ -83,16 +91,17 @@ fn coordsFromString(str: []const u8) !Coordinates {
 /// Given a slice of box coordinates, returns the shortest 1000 connections.
 fn collectShortestConnections(
     box_coords: []const Coordinates,
+    num_connections: usize,
     allocator: Allocator,
 ) ![]const Connection {
     var connection_queue: ConnectionQueue = .init(allocator, {});
-    try connection_queue.ensureTotalCapacityPrecise(NUM_CONNECTIONS_TO_MAKE);
+    try connection_queue.ensureTotalCapacityPrecise(num_connections);
     for (0..box_coords.len) |i| {
         for (i + 1..box_coords.len) |j| {
             const distance = calculateDistance(box_coords[i], box_coords[j]);
             const connection: Connection = .{ .distance = distance, .box_ids = .{ i, j } };
-           
-            if (connection_queue.count() < NUM_CONNECTIONS_TO_MAKE) {
+
+            if (connection_queue.count() < num_connections) {
                 try connection_queue.add(connection);
                 continue;
             }
@@ -115,18 +124,23 @@ fn compareByDistance(_: void, a: Connection, b: Connection) std.math.Order {
     return std.math.order(a.distance, b.distance).invert();
 }
 
-fn calculateDistance(p1: Coordinates, p2: Coordinates) u32 {
+fn calculateDistance(p1: Coordinates, p2: Coordinates) DistanceType {
     const x1, const y1, const z1 = p1;
     const x2, const y2, const z2 = p2;
-    return squaredDiff(x1, x2) + squaredDiff(y1, y2) + squaredDiff(z1, z2);
+
+    const T = comptime utils.UpgradeBitWidth(Coordinate, 3);
+    const square_diff_sum: T = squaredDiff(x1, x2, T) + squaredDiff(y1, y2, T) + squaredDiff(z1, z2, T);
+
+    return @intCast(std.math.sqrt(square_diff_sum));
 }
 
-fn squaredDiff(a: Coordinate, b: Coordinate) u32 {
-    const signed_a: i16 = @intCast(a);
-    const signed_b: i16 = @intCast(b);
+fn squaredDiff(a: Coordinate, b: Coordinate, comptime T: type) T {
+    const SignedType: type = comptime utils.UnsignedToSigned(Coordinate);
+    const signed_a: SignedType = @intCast(a);
+    const signed_b: SignedType = @intCast(b);
 
-    const diff: u32 = @intCast(@abs(signed_a - signed_b));
-    return std.math.pow(u32, diff, 2);
+    const diff: T = @intCast(@abs(signed_a - signed_b));
+    return std.math.pow(T, diff, 2);
 }
 
 /// Given a slice of connections and the total number of junction boxes, return a slice of circuits
@@ -142,7 +156,12 @@ fn formCircuits(
     }
 
     var circuit_by_id: CircuitByIdMap = .init(allocator);
-    
+    const network_params = NetworkParameters{
+        .circuit_by_id = &circuit_by_id,
+        .circuit_id_by_box = circuit_id_by_box,
+        .allocator = allocator,
+    };
+
     var total_circuits_created: usize = 0;
     for (connections) |connection| {
         const box1_id, const box2_id = connection.box_ids;
@@ -154,23 +173,23 @@ fn formCircuits(
         }
 
         if (circuit1_id_opt == null and circuit2_id_opt == null) {
-            try createNewCircuit(&circuit_by_id, circuit_id_by_box, total_circuits_created, box1_id, box2_id, allocator);
+            try createNewCircuit(network_params, total_circuits_created, box1_id, box2_id);
             total_circuits_created += 1;
             continue;
         }
 
         if (circuit1_id_opt == null) {
-            try addBoxToCircuit(&circuit_by_id, circuit_id_by_box, circuit2_id_opt.?, box1_id, allocator);
+            try addBoxToCircuit(network_params, circuit2_id_opt.?, box1_id);
             continue;
         }
 
         const circuit1_id = circuit1_id_opt.?;
         if (circuit2_id_opt == null) {
-            try addBoxToCircuit(&circuit_by_id, circuit_id_by_box, circuit1_id, box2_id, allocator);
+            try addBoxToCircuit(network_params, circuit1_id, box2_id);
             continue;
         }
 
-        try mergeCircuits(&circuit_by_id, circuit_id_by_box, circuit1_id, circuit2_id_opt.?, allocator);
+        try mergeCircuits(network_params, circuit1_id, circuit2_id_opt.?);
     }
 
     // Compile circuits to slice
@@ -185,48 +204,45 @@ fn formCircuits(
 }
 
 fn createNewCircuit(
-    circuit_by_id: *CircuitByIdMap,
-    circuit_id_by_box: []?usize,
+    network_params: NetworkParameters,
     new_circuit_id: usize,
     box1_id: usize,
     box2_id: usize,
-    allocator: Allocator,
 ) !void {
-    var new_circuit = try std.ArrayList(usize).initCapacity(allocator, 2);
+    var new_circuit = try std.ArrayList(usize).initCapacity(network_params.allocator, 2);
     new_circuit.appendSliceAssumeCapacity(&.{ box1_id, box2_id });
 
-    try circuit_by_id.put(new_circuit_id, new_circuit);
+    try network_params.circuit_by_id.put(new_circuit_id, new_circuit);
+    
+    const circuit_id_by_box = network_params.circuit_id_by_box;
     circuit_id_by_box[box1_id] = new_circuit_id;
     circuit_id_by_box[box2_id] = new_circuit_id;
-} 
+}
 
 inline fn addBoxToCircuit(
-    circuits: *CircuitByIdMap,
-    circuit_id_by_box: []?usize,
+    network_params: NetworkParameters,
     circuit_id: usize,
     box_id: usize,
-    allocator: Allocator,
 ) !void {
-    try circuits.getPtr(circuit_id).?.append(allocator, box_id);
-    circuit_id_by_box[box_id] = circuit_id;
+    try network_params.circuit_by_id.getPtr(circuit_id).?.append(network_params.allocator, box_id);
+    network_params.circuit_id_by_box[box_id] = circuit_id;
 }
 
 fn mergeCircuits(
-    circuit_by_id: *CircuitByIdMap,
-    circuit_id_by_box: []?usize,
+    network_params: NetworkParameters,
     id1: usize,
     id2: usize,
-    allocator: Allocator,
 ) !void {
+    const circuit_by_id = network_params.circuit_by_id;
     const circuit1_size = circuit_by_id.get(id1).?.items.len;
     const circuit2_size = circuit_by_id.get(id2).?.items.len;
     const big_circuit_id = if (circuit1_size >= circuit2_size) id1 else id2;
     const small_circuit_id = if (circuit1_size >= circuit2_size) id2 else id1;
 
     const small_circuit_boxes = circuit_by_id.get(small_circuit_id).?.items;
-    try circuit_by_id.getPtr(big_circuit_id).?.appendSlice(allocator, small_circuit_boxes);
+    try circuit_by_id.getPtr(big_circuit_id).?.appendSlice(network_params.allocator, small_circuit_boxes);
     for (small_circuit_boxes) |box_id| {
-        circuit_id_by_box[box_id] = big_circuit_id;
+        network_params.circuit_id_by_box[box_id] = big_circuit_id;
     }
 
     if (!circuit_by_id.remove(small_circuit_id)) {
@@ -242,4 +258,3 @@ test "Example" {
     const p1_result = try simulateConnections(TEST_FILEPATH, 10, allocator);
     try std.testing.expect(p1_result == 40);
 }
-
