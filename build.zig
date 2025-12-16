@@ -15,7 +15,7 @@ pub fn build(b: *std.Build) !void {
     for (1..NUM_DAYS + 1) |i| {
         const day_string = b.fmt("d0{d}", .{ i });
         const test_step_string = b.fmt("test{d}", .{ i });
-        const main_file_rel_path = b.fmt("{s}/src/main.zig", .{ day_string });
+        const main_file_rel_path = b.fmt("src/{s}/main.zig", .{ day_string });
 
         const main_module = b.createModule(.{
             .root_source_file = b.path(main_file_rel_path),
