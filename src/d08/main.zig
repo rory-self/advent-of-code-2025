@@ -1,6 +1,7 @@
 // Modules //
 const std = @import("std");
 const utils = @import("utils");
+const dsu = @import("dsu.zig");
 
 // Constants //
 const TEST_FILEPATH = "test-inputs/d08.txt";
@@ -16,14 +17,8 @@ const Connection = struct {
     box_ids: [2]usize,
 };
 const ConnectionQueue = std.PriorityQueue(Connection, void, compareByDistance);
-const Circuit = []const usize;
-const CircuitByIdMap = std.AutoHashMap(usize, std.ArrayList(usize));
+const DisjointSetUnion = dsu.DisjointSetUnion;
 const Allocator = std.mem.Allocator;
-const NetworkParameters = struct {
-    circuit_by_id: *CircuitByIdMap,
-    circuit_id_by_box: []?usize,
-    allocator: Allocator,
-};
 
 // Implementation //
 pub fn main() !void {
@@ -32,32 +27,55 @@ pub fn main() !void {
     const allocator = arena.allocator();
 
     const input_filepath = try utils.getFilepathArg(allocator);
-    const p1_result = try simulateConnections(input_filepath, NUM_CONNECTIONS, allocator);
+    const p1_result, const p2_result = try simulateConnections(input_filepath, NUM_CONNECTIONS, allocator);
 
-    try utils.printToStdout("Part 1 result: {}\n", .{p1_result});
+    try utils.printToStdout("Part 1 result: {d} Part 2 result: {d}\n", .{ p1_result, p2_result });
 }
 
 fn simulateConnections(
     input_filepath: []const u8,
     num_connections: usize,
     allocator: Allocator,
-) !usize {
+) !struct {usize, u64 } {
     const box_coords = try boxCoordsFromFile(input_filepath, allocator);
-    const connections = try collectShortestConnections(box_coords, num_connections, allocator);
+    var connections = try collectConnections(box_coords, allocator);
+    if (connections.count() < num_connections) {
+        return error.NotEnoughConnections;
+    }
 
-    const circuits = try formCircuits(connections, box_coords.len, allocator);
-    std.mem.sort(Circuit, circuits, {}, compareCircuitSize);
+    var network = try DisjointSetUnion.init(box_coords.len, allocator);
+
+    // Part 1
+    try formCircuits(&connections, &network, num_connections);
+    const circuit_sizes = network.getSetSizes();
+    const size_result = try multiplyCircuitSizes(circuit_sizes, allocator);
+
+    // Part 2
+    var last_connection: Connection = undefined;
+    while (network.count() > 1) {
+        last_connection = connections.peek().?;
+        try formCircuits(&connections, &network, 1);
+    }
+
+    const box1, const box2 = last_connection.box_ids;
+    const x1: u64 = @intCast(box_coords[box1][0]);
+    const x2: u64 = @intCast(box_coords[box2][0]);
+
+    const x_coordinate_total = x1 * x2;
+    
+    return .{ size_result, x_coordinate_total };
+}
+
+fn multiplyCircuitSizes(circuit_sizes: []const usize, allocator: Allocator) !usize {
+    const sizes = try allocator.dupe(usize, circuit_sizes);
+    std.mem.sort(usize, sizes, {}, comptime std.sort.desc(usize));
 
     var size_result: usize = 1;
     for (0..NUM_CIRCUITS_TO_MULTIPLY) |i| {
-        size_result *= circuits[i].len;
+        size_result *= sizes[i];
     }
 
     return size_result;
-}
-
-fn compareCircuitSize(_: void, lhs: Circuit, rhs: Circuit) bool {
-    return lhs.len > rhs.len;
 }
 
 fn boxCoordsFromFile(filepath: []const u8, allocator: Allocator) ![]const Coordinates {
@@ -88,40 +106,25 @@ fn coordsFromString(str: []const u8) !Coordinates {
     return coordinates;
 }
 
-/// Given a slice of box coordinates, returns the shortest 1000 connections.
-fn collectShortestConnections(
-    box_coords: []const Coordinates,
-    num_connections: usize,
-    allocator: Allocator,
-) ![]const Connection {
+fn collectConnections(box_coords: []const Coordinates, allocator: Allocator) !ConnectionQueue {
     var connection_queue: ConnectionQueue = .init(allocator, {});
-    try connection_queue.ensureTotalCapacityPrecise(num_connections);
+    const num_possible_connections = (box_coords.len * (box_coords.len - 1)) / 2;
+    try connection_queue.ensureTotalCapacityPrecise(num_possible_connections);
+
     for (0..box_coords.len) |i| {
         for (i + 1..box_coords.len) |j| {
             const distance = calculateDistance(box_coords[i], box_coords[j]);
             const connection: Connection = .{ .distance = distance, .box_ids = .{ i, j } };
 
-            if (connection_queue.count() < num_connections) {
-                try connection_queue.add(connection);
-                continue;
-            }
-
-            // popped item from the priority queue is always the longest connection
-            const largest_distance = connection_queue.peek().?.distance;
-            if (largest_distance <= distance) {
-                continue;
-            }
-
-            _ = connection_queue.remove();
             try connection_queue.add(connection);
         }
     }
 
-    return connection_queue.items;
+    return connection_queue;
 }
 
 fn compareByDistance(_: void, a: Connection, b: Connection) std.math.Order {
-    return std.math.order(a.distance, b.distance).invert();
+    return std.math.order(a.distance, b.distance);
 }
 
 fn calculateDistance(p1: Coordinates, p2: Coordinates) DistanceType {
@@ -143,111 +146,17 @@ fn squaredDiff(a: Coordinate, b: Coordinate, comptime T: type) T {
     return std.math.pow(T, diff, 2);
 }
 
-/// Given a slice of connections and the total number of junction boxes, return a slice of circuits
-/// formed.
 fn formCircuits(
-    connections: []const Connection,
-    num_boxes: usize,
-    allocator: Allocator,
-) ![]Circuit {
-    const circuit_id_by_box = try allocator.alloc(?usize, num_boxes);
-    for (0..num_boxes) |i| {
-        circuit_id_by_box[i] = null;
-    }
-
-    var circuit_by_id: CircuitByIdMap = .init(allocator);
-    const network_params = NetworkParameters{
-        .circuit_by_id = &circuit_by_id,
-        .circuit_id_by_box = circuit_id_by_box,
-        .allocator = allocator,
-    };
-
-    var total_circuits_created: usize = 0;
-    for (connections) |connection| {
+    connections: *ConnectionQueue,
+    network: *DisjointSetUnion,
+    num_connections: usize
+) !void {
+    for (0..num_connections) |_| {
+        const connection = connections.removeOrNull() orelse return error.NoRemainingConnections;
         const box1_id, const box2_id = connection.box_ids;
-        const circuit1_id_opt = circuit_id_by_box[box1_id];
-        const circuit2_id_opt = circuit_id_by_box[box2_id];
-
-        if (circuit1_id_opt == circuit2_id_opt and circuit1_id_opt != null and circuit2_id_opt != null) {
-            continue;
-        }
-
-        if (circuit1_id_opt == null and circuit2_id_opt == null) {
-            try createNewCircuit(network_params, total_circuits_created, box1_id, box2_id);
-            total_circuits_created += 1;
-            continue;
-        }
-
-        if (circuit1_id_opt == null) {
-            try addBoxToCircuit(network_params, circuit2_id_opt.?, box1_id);
-            continue;
-        }
-
-        const circuit1_id = circuit1_id_opt.?;
-        if (circuit2_id_opt == null) {
-            try addBoxToCircuit(network_params, circuit1_id, box2_id);
-            continue;
-        }
-
-        try mergeCircuits(network_params, circuit1_id, circuit2_id_opt.?);
-    }
-
-    // Compile circuits to slice
-    var circuits = try allocator.alloc(Circuit, circuit_by_id.count());
-    var circuit_it = circuit_by_id.valueIterator();
-    for (0..circuits.len) |i| {
-        const curr_circuit = circuit_it.next() orelse return error.MissingCircuit;
-        circuits[i] = try curr_circuit.toOwnedSlice(allocator);
-    }
-
-    return circuits;
-}
-
-fn createNewCircuit(
-    network_params: NetworkParameters,
-    new_circuit_id: usize,
-    box1_id: usize,
-    box2_id: usize,
-) !void {
-    var new_circuit = try std.ArrayList(usize).initCapacity(network_params.allocator, 2);
-    new_circuit.appendSliceAssumeCapacity(&.{ box1_id, box2_id });
-
-    try network_params.circuit_by_id.put(new_circuit_id, new_circuit);
-    
-    const circuit_id_by_box = network_params.circuit_id_by_box;
-    circuit_id_by_box[box1_id] = new_circuit_id;
-    circuit_id_by_box[box2_id] = new_circuit_id;
-}
-
-inline fn addBoxToCircuit(
-    network_params: NetworkParameters,
-    circuit_id: usize,
-    box_id: usize,
-) !void {
-    try network_params.circuit_by_id.getPtr(circuit_id).?.append(network_params.allocator, box_id);
-    network_params.circuit_id_by_box[box_id] = circuit_id;
-}
-
-fn mergeCircuits(
-    network_params: NetworkParameters,
-    id1: usize,
-    id2: usize,
-) !void {
-    const circuit_by_id = network_params.circuit_by_id;
-    const circuit1_size = circuit_by_id.get(id1).?.items.len;
-    const circuit2_size = circuit_by_id.get(id2).?.items.len;
-    const big_circuit_id = if (circuit1_size >= circuit2_size) id1 else id2;
-    const small_circuit_id = if (circuit1_size >= circuit2_size) id2 else id1;
-
-    const small_circuit_boxes = circuit_by_id.get(small_circuit_id).?.items;
-    try circuit_by_id.getPtr(big_circuit_id).?.appendSlice(network_params.allocator, small_circuit_boxes);
-    for (small_circuit_boxes) |box_id| {
-        network_params.circuit_id_by_box[box_id] = big_circuit_id;
-    }
-
-    if (!circuit_by_id.remove(small_circuit_id)) {
-        return error.RemoveFailure;
-    }
+        
+        try network.unionSets(box1_id, box2_id);
+    }   
 }
 
 test "Example" {
@@ -255,6 +164,8 @@ test "Example" {
     arena.deinit();
     const allocator = arena.allocator();
 
-    const p1_result = try simulateConnections(TEST_FILEPATH, 10, allocator);
+    const p1_result, const p2_result = try simulateConnections(TEST_FILEPATH, 10, allocator);
     try std.testing.expect(p1_result == 40);
+    try std.testing.expect(p2_result == 25272);
 }
+
