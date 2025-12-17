@@ -72,4 +72,3 @@ pub const DisjointSetUnion = struct {
         return self.num_sets;
     }
 };
-

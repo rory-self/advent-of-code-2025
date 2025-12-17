@@ -36,7 +36,7 @@ fn simulateConnections(
     input_filepath: []const u8,
     num_connections: usize,
     allocator: Allocator,
-) !struct {usize, u64 } {
+) !struct { usize, u64 } {
     const box_coords = try boxCoordsFromFile(input_filepath, allocator);
     var connections = try collectConnections(box_coords, allocator);
     if (connections.count() < num_connections) {
@@ -62,7 +62,7 @@ fn simulateConnections(
     const x2: u64 = @intCast(box_coords[box2][0]);
 
     const x_coordinate_total = x1 * x2;
-    
+
     return .{ size_result, x_coordinate_total };
 }
 
@@ -146,17 +146,13 @@ fn squaredDiff(a: Coordinate, b: Coordinate, comptime T: type) T {
     return std.math.pow(T, diff, 2);
 }
 
-fn formCircuits(
-    connections: *ConnectionQueue,
-    network: *DisjointSetUnion,
-    num_connections: usize
-) !void {
+fn formCircuits(connections: *ConnectionQueue, network: *DisjointSetUnion, num_connections: usize) !void {
     for (0..num_connections) |_| {
         const connection = connections.removeOrNull() orelse return error.NoRemainingConnections;
         const box1_id, const box2_id = connection.box_ids;
-        
+
         try network.unionSets(box1_id, box2_id);
-    }   
+    }
 }
 
 test "Example" {
@@ -168,4 +164,3 @@ test "Example" {
     try std.testing.expect(p1_result == 40);
     try std.testing.expect(p2_result == 25272);
 }
-
