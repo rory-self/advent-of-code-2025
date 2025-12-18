@@ -1,7 +1,7 @@
 const std = @import("std");
 const builtin = @import("builtin");
 
-const NUM_DAYS = 8;
+const NUM_DAYS = 9;
 const SemanticVersion = std.SemanticVersion;
 
 pub fn build(b: *std.Build) !void {
