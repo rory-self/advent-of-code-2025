@@ -1,3 +1,4 @@
 inputs/
 .zig-cache/
 zig-out/
+test-inputs
