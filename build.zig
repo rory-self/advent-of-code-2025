@@ -1,7 +1,7 @@
 const std = @import("std");
 const builtin = @import("builtin");
 
-const NUM_DAYS = 9;
+const NUM_DAYS = 10;
 const SemanticVersion = std.SemanticVersion;
 
 pub fn build(b: *std.Build) !void {
@@ -21,8 +21,7 @@ pub fn build(b: *std.Build) !void {
     });
 
     for (1..NUM_DAYS + 1) |i| {
-        const day_string = b.fmt("d0{d}", .{i});
-        const test_step_string = b.fmt("test{d}", .{i});
+        const day_string = if (i < 10) b.fmt("d0{d}", .{i}) else b.fmt("d{d}", .{i});
         const main_file_rel_path = b.fmt("src/{s}/main.zig", .{day_string});
 
         const main_module = b.createModule(.{
@@ -37,6 +36,7 @@ pub fn build(b: *std.Build) !void {
             .use_llvm = true,
         });
 
+        const test_step_string = b.fmt("test{d}", .{i});
         const test_step = b.step(test_step_string, "Run unit tests");
         const tests = b.addTest(.{ .root_module = main_module });
         const run_tests = b.addRunArtifact(tests);
