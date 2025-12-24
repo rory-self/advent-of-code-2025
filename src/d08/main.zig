@@ -47,12 +47,11 @@ fn simulateConnections(
 
     // Part 1
     try formCircuits(&connections, &network, num_connections);
-    const circuit_sizes = network.getSetSizes();
-    const size_result = try multiplyCircuitSizes(circuit_sizes, allocator);
+    const size_result = try multiplyCircuitSizes(network.size, allocator);
 
     // Part 2
     var last_connection: Connection = undefined;
-    while (network.count() > 1) {
+    while (network.num_sets > 1) {
         last_connection = connections.peek().?;
         try formCircuits(&connections, &network, 1);
     }
@@ -60,7 +59,6 @@ fn simulateConnections(
     const box1, const box2 = last_connection.box_ids;
     const x1: u64 = @intCast(box_coords[box1][0]);
     const x2: u64 = @intCast(box_coords[box2][0]);
-
     const x_coordinate_total = x1 * x2;
 
     return .{ size_result, x_coordinate_total };

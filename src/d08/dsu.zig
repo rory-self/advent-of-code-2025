@@ -23,7 +23,8 @@ pub const DisjointSetUnion = struct {
         };
     }
 
-    /// Find root element / identifier of the element's set
+    /// Find root element / identifier of the element's set.
+    /// Performs path optimisation to improve future runs.
     pub fn find(self: *DisjointSetUnion, element: usize) !usize {
         if (element >= self.num_elements) {
             return error.InvalidElement;
@@ -62,13 +63,5 @@ pub const DisjointSetUnion = struct {
         self.parent[b_set] = a_set;
         self.size[a_set] += self.size[b_set];
         self.num_sets -= 1;
-    }
-
-    pub fn getSetSizes(self: *DisjointSetUnion) []const usize {
-        return self.size;
-    }
-
-    pub fn count(self: *DisjointSetUnion) usize {
-        return self.num_sets;
     }
 };
