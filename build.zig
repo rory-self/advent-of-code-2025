@@ -2,50 +2,65 @@ const std = @import("std");
 const builtin = @import("builtin");
 
 const NUM_DAYS = 10;
-const SemanticVersion = std.SemanticVersion;
+const TARGET_VERSION = "0.15.2";
+const OPTIMISATION_MODE = .Debug;
+
+const UTILS_MODULE_NAME = "utils";
+const UTILS_MODULE_PATH = "src/utils.zig";
+const MAIN_REL_PATH_FMT = "src/{s}/main.zig";
+
+const DayNum = u4;
 
 pub fn build(b: *std.Build) !void {
-    const zig_version = builtin.zig_version;
-    const project_zig_version = try SemanticVersion.parse("0.15.2");
-    if (versionsDoNotMatch(zig_version, project_zig_version)) {
+    const project_zig_version: std.SemanticVersion = try .parse(TARGET_VERSION);
+    if (versionsDoNotMatch(builtin.zig_version, project_zig_version)) {
         return error.ZigVersionMismatch;
     }
 
     const target = b.standardTargetOptions(.{});
-    const optimize = .Debug;
-
-    const utils_module = b.addModule("utils", .{
-        .root_source_file = b.path("utils.zig"),
+    const utils_module = b.addModule(UTILS_MODULE_NAME, .{
+        .root_source_file = b.path(UTILS_MODULE_PATH),
         .target = target,
-        .optimize = optimize,
+        .optimize = OPTIMISATION_MODE,
     });
 
     for (1..NUM_DAYS + 1) |i| {
-        const day_string = if (i < 10) b.fmt("d0{d}", .{i}) else b.fmt("d{d}", .{i});
-        const main_file_rel_path = b.fmt("src/{s}/main.zig", .{day_string});
-
-        const main_module = b.createModule(.{
-            .root_source_file = b.path(main_file_rel_path),
-            .target = target,
-            .optimize = optimize,
-            .imports = &.{.{ .name = "utils", .module = utils_module }},
-        });
-        const exe = b.addExecutable(.{
-            .name = day_string,
-            .root_module = main_module,
-            .use_llvm = true,
-        });
-
-        const test_step_string = b.fmt("test{d}", .{i});
-        const test_step = b.step(test_step_string, "Run unit tests");
-        const tests = b.addTest(.{ .root_module = main_module });
-        const run_tests = b.addRunArtifact(tests);
-        test_step.dependOn(&run_tests.step);
-
-        b.installArtifact(exe);
+        const day_num: DayNum = @truncate(i);
+        build_day_exe(b, utils_module, day_num, target);
     }
 }
 
-fn versionsDoNotMatch(v1: SemanticVersion, v2: SemanticVersion) bool {
+fn versionsDoNotMatch(v1: std.SemanticVersion, v2: std.SemanticVersion) bool {
     return v1.major != v2.major or v1.minor != v2.minor or v1.patch != v2.patch;
 }
+
+fn build_day_exe(
+    b: *std.Build,
+    utils_module: *std.Build.Module,
+    day_num: DayNum,
+    target: std.Build.ResolvedTarget,
+) void {
+    const day_string = b.fmt("d{d:0>2}", .{ day_num });
+    const main_file_rel_path = b.fmt(MAIN_REL_PATH_FMT, .{day_string});
+
+    const main_module = b.createModule(.{
+        .root_source_file = b.path(main_file_rel_path),
+        .target = target,
+        .optimize = OPTIMISATION_MODE,
+        .imports = &.{.{ .name = UTILS_MODULE_NAME, .module = utils_module }},
+    });
+    const exe = b.addExecutable(.{
+        .name = day_string,
+        .root_module = main_module,
+        .use_llvm = true,
+    });
+
+    const test_step_string = b.fmt("test{d}", .{ day_num });
+    const test_step = b.step(test_step_string, "Run unit tests");
+    const tests = b.addTest(.{ .root_module = main_module });
+    const run_tests = b.addRunArtifact(tests);
+    test_step.dependOn(&run_tests.step);
+
+    b.installArtifact(exe);
+}
+
