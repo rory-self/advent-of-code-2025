@@ -6,6 +6,7 @@ const Allocator = std.mem.Allocator;
 
 pub fn printToStdout(comptime fmt: []const u8, args: anytype) !void {
     const stdout_file = std.fs.File.stdout();
+
     var writer_buf: [IO_BUF_SIZE]u8 = undefined;
     var stdout_writer = stdout_file.writer(&writer_buf);
     const stdout_interface = &stdout_writer.interface;
@@ -16,11 +17,16 @@ pub fn printToStdout(comptime fmt: []const u8, args: anytype) !void {
 
 pub fn getFilepathArg(allocator: Allocator) ![]const u8 {
     var args = try std.process.argsWithAllocator(allocator);
+    defer args.deinit();
     _ = args.skip();
 
-    return args.next() orelse error.MissingArgument;
+    const filepath_arg = args.next() orelse return error.MissingArgument;
+    const filepath_dupe = try allocator.dupe(u8, filepath_arg);
+
+    return filepath_dupe;
 }
 
+/// Return the contents of the file as a u8 slice. Must be freed using the allocator.
 pub fn readAllFromFile(filepath: []const u8, allocator: Allocator) ![]const u8 {
     const file = try std.fs.cwd().openFile(filepath, .{ .mode = .read_only });
     defer file.close();
@@ -40,15 +46,10 @@ pub fn UnsignedToSigned(comptime T: type) type {
         }
 
         if (type_info.int.signedness != .unsigned) {
-            @compileError("Expeceted an unsigned integer type");
+            @compileError("Expected an unsigned integer type");
         }
 
-        return @Type(.{
-            .int = .{
-                .signedness = .signed,
-                .bits = type_info.int.bits,
-            },
-        });
+        return std.meta.Int(.signed, type_info.int.bits);
     }
 }
 
@@ -63,9 +64,7 @@ pub fn UpgradeBitWidth(comptime T: type, comptime bits_to_extend: u16) type {
             @compileError(ERR_EXPECTED_INT);
         }
 
-        return @Type(.{ .int = .{
-            .signedness = type_info.int.signedness,
-            .bits = type_info.int.bits + bits_to_extend,
-        } });
+        const int_info = type_info.int;
+        return std.meta.Int(int_info.signedness, int_info.bits + bits_to_extend);
     }
 }
