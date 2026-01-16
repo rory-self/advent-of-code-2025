@@ -26,7 +26,7 @@ pub fn build(b: *std.Build) !void {
 
     for (1..NUM_DAYS + 1) |i| {
         const day_num: DayNum = @truncate(i);
-        build_day_exe(b, utils_module, day_num, target);
+        buildDayExe(b, utils_module, day_num, target);
     }
 }
 
@@ -34,13 +34,13 @@ fn versionsDoNotMatch(v1: std.SemanticVersion, v2: std.SemanticVersion) bool {
     return v1.major != v2.major or v1.minor != v2.minor or v1.patch != v2.patch;
 }
 
-fn build_day_exe(
+fn buildDayExe(
     b: *std.Build,
     utils_module: *std.Build.Module,
     day_num: DayNum,
     target: std.Build.ResolvedTarget,
 ) void {
-    const day_string = b.fmt("d{d:0>2}", .{ day_num });
+    const day_string = b.fmt("d{d:0>2}", .{day_num});
     const main_file_rel_path = b.fmt(MAIN_REL_PATH_FMT, .{day_string});
 
     const main_module = b.createModule(.{
@@ -55,7 +55,7 @@ fn build_day_exe(
         .use_llvm = true,
     });
 
-    const test_step_string = b.fmt("test{d}", .{ day_num });
+    const test_step_string = b.fmt("test{d}", .{day_num});
     const test_step = b.step(test_step_string, "Run unit tests");
     const tests = b.addTest(.{ .root_module = main_module });
     const run_tests = b.addRunArtifact(tests);
@@ -63,4 +63,3 @@ fn build_day_exe(
 
     b.installArtifact(exe);
 }
-
