@@ -52,7 +52,7 @@ fn findPasswords(input_filepath: []const u8, allocator: std.mem.Allocator) ![2]P
     var num_zeroes: Password = 0;
     var zero_crossings: Password = 0;
     for (instructions) |instruction| {
-        zero_crossings += turn_dial(&curr_dial_pos, instruction);
+        zero_crossings += turnDial(&curr_dial_pos, instruction);
 
         if (curr_dial_pos == 0) {
             num_zeroes += 1;
