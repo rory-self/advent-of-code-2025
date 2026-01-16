@@ -30,6 +30,12 @@ const Password = u16;
 const Instruction = struct {
     direction: Direction,
     num_turns: Password,
+
+    fn fromString(instruction_string: []const u8) !Instruction {
+        const direction: Direction = try .fromChar(instruction_string[0]);
+        const num_turns: Password = try std.fmt.parseInt(Password, instruction_string[1..], 10);
+        return .{ .direction = direction, .num_turns = num_turns };
+    }
 };
 
 pub fn main() !void {
@@ -71,10 +77,7 @@ fn instructionsFromFile(filepath: []const u8, allocator: std.mem.Allocator) ![]c
     errdefer instructions.deinit(allocator);
 
     while (instructions_it.next()) |instruction_string| {
-        const direction: Direction = try .fromChar(instruction_string[0]);
-        const num_turns: Password = try std.fmt.parseInt(Password, instruction_string[1..], 10);
-        const instruction: Instruction = .{ .direction = direction, .num_turns = num_turns };
-
+        const instruction: Instruction = try .fromString(instruction_string);
         try instructions.append(allocator, instruction);
     }
 
