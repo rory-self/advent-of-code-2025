@@ -21,9 +21,7 @@ pub fn getFilepathArg(allocator: Allocator) ![]const u8 {
     _ = args.skip();
 
     const filepath_arg = args.next() orelse return error.MissingArgument;
-    const filepath_dupe = try allocator.dupe(u8, filepath_arg);
-
-    return filepath_dupe;
+    return try allocator.dupe(u8, filepath_arg);
 }
 
 /// Return the contents of the file as a u8 slice. Must be freed using the allocator.
@@ -33,6 +31,8 @@ pub fn readAllFromFile(filepath: []const u8, allocator: Allocator) ![]const u8 {
 
     const file_length = try file.getEndPos();
     const file_contents = try allocator.alloc(u8, file_length);
+    errdefer allocator.free(file_contents);
+
     _ = try file.readAll(file_contents);
 
     return file_contents;
