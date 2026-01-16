@@ -83,13 +83,13 @@ fn instructionsFromFile(filepath: []const u8, allocator: std.mem.Allocator) ![]c
 
 /// Turn the dial according to the given instruction, return the number of times the 0 position
 /// was crossed.
-fn turn_dial(curr_dial_pos: *DialPosition, instruction: Instruction) Password {
+fn turnDial(curr_dial_pos: *DialPosition, instruction: Instruction) Password {
     const num_turns: Password = instruction.num_turns;
     if (num_turns == 0) {
         return 0;
     }
 
-    // Calculate full rotations and remaining turns 
+    // Calculate full rotations and remaining turns
     const effective_turns: TurningType = @intCast(num_turns % NUM_DIALS);
     var zero_clicks: Password = @intCast(@divFloor(num_turns, NUM_DIALS));
     if (effective_turns == 0) {
